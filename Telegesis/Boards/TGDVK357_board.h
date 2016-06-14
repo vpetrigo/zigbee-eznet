@@ -673,11 +673,15 @@ uint8_t gpioOutPowerUp[3] = {                                               \
 uint16_t gpioCfgPowerDown[6] = {                                                  \
                               ((GPIOCFG_IN_PUD     <<PA0_CFG_BIT)|              \
                                (GPIOCFG_IN_PUD     <<PA1_CFG_BIT)|              \
-                               (GPIOCFG_IN_PUD     <<PA2_CFG_BIT)|              \
+                               /* PA2 and PA3 - sensors' supply pins */         \
+                               (GPIOCFG_OUT        <<PA2_CFG_BIT)|              \
                                (GPIOCFG_OUT        <<PA3_CFG_BIT)),             \
-                              ((PWRDN_CFG_PTI_EN   <<PA4_CFG_BIT)|              \
-                               (PWRDN_CFG_PTI_DATA <<PA5_CFG_BIT)|              \
-                               (PWRDN_CFG_DFL_RHO  <<PA6_CFG_BIT)|              \
+                              ((GPIOCFG_IN_PUD     <<PA4_CFG_BIT)|              \
+                               /* Bootloader option */                          \
+                               (GPIOCFG_IN_PUD     <<PA5_CFG_BIT)|              \
+                               /* LED0 on modules CTB */                        \
+                               (GPIOCFG_OUT        <<PA6_CFG_BIT)|              \
+                               /* LED1 on modules CTB */                        \
                                (GPIOCFG_OUT        <<PA7_CFG_BIT)),             \
                               ((GPIOCFG_IN_PUD     <<PB0_CFG_BIT)|              \
                                (GPIOCFG_OUT        <<PB1_CFG_BIT)| /* SC1TXD  */\
@@ -689,14 +693,17 @@ uint16_t gpioCfgPowerDown[6] = {                                                
                                (GPIOCFG_IN_PUD     <<PB6_CFG_BIT)|              \
                                /* need to use pulldown for sleep */             \
                                (GPIOCFG_IN_PUD     <<PB7_CFG_BIT)),             \
-                              ((GPIOCFG_IN_PUD     <<PC0_CFG_BIT)|              \
-                               (GPIOCFG_OUT        <<PC1_CFG_BIT)|              \
-                               (GPIOCFG_OUT        <<PC2_CFG_BIT)|              \
+                               /* LED2 on the DVK board */                      \
+                              ((GPIOCFG_OUT        <<PC0_CFG_BIT)|              \
+                               /* ADC3 light sensor input */                    \
+                               (GPIOCFG_IN_PUD     <<PC1_CFG_BIT)|              \
+                               (GPIOCFG_IN_PUD     <<PC2_CFG_BIT)|              \
                                (GPIOCFG_IN_PUD     <<PC3_CFG_BIT)),             \
                               ((GPIOCFG_IN_PUD     <<PC4_CFG_BIT)|              \
-                               (PWRDN_CFG_LED2     <<PC5_CFG_BIT)|              \
-                               (PWRDN_CFG_BUTTON1  <<PC6_CFG_BIT)|              \
-                               (CFG_TEMPEN         <<PC7_CFG_BIT))              \
+                               /* TX_active pin */                              \
+                               (GPIOCFG_IN_PUD     <<PC5_CFG_BIT)|              \
+                               (GPIOCFG_IN_PUD     <<PC6_CFG_BIT)|              \
+                               (GPIOCFG_IN_PUD     <<PC7_CFG_BIT))              \
                              }
 
 
@@ -708,19 +715,16 @@ uint8_t gpioOutPowerDown[3] = {                                               \
                              ((GPIOOUT_PULLUP     <<PA0_BIT)|               \
                               (GPIOOUT_PULLUP     <<PA1_BIT)|               \
                               (GPIOOUT_PULLDOWN   <<PA2_BIT)|               \
-                              /* nSSEL is idle high */                      \
                               (GPIOOUT_PULLDOWN   <<PA3_BIT)|               \
-                              /* enable is idle low */                      \
-                              (PWRDN_OUT_PTI_EN   <<PA4_BIT)|               \
-                              /* data is idle high */                       \
-                              (PWRDN_OUT_PTI_DATA <<PA5_BIT)|               \
-                              (PWRDN_OUT_DFL_RHO  <<PA6_BIT)|               \
-                              /* LED off */                                 \
+                              (GPIOOUT_PULLUP     <<PA4_BIT)|               \
+                              (GPIOOUT_PULLUP     <<PA5_BIT)|               \
+                              /* LEDs off */                                \
+                              (GPIOOUT_PULLUP     <<PA6_BIT)|               \
                               (GPIOOUT_PULLUP     <<PA7_BIT)),              \
                              ((GPIOOUT_PULLUP     <<PB0_BIT)|               \
-                              (GPIOOUT_PULLUP     <<PB1_BIT)|  /* SC1TXD  */\
+                              (GPIOOUT_PULLDOWN   <<PB1_BIT)|  /* SC1TXD  */\
                               (GPIOOUT_PULLUP     <<PB2_BIT)|  /* SC1RXD  */\
-                              (GPIOOUT_PULLDOWN   <<PB3_BIT)|  /* SC1nCTS */\
+                              (GPIOOUT_PULLUP     <<PB3_BIT)|  /* SC1nCTS */\
                               (GPIOOUT_PULLUP     <<PB4_BIT)|  /* SC1nRTS */\
                               /* tempsense needs pulldown */                \
                               (GPIOOUT_PULLDOWN   <<PB5_BIT)|               \
@@ -733,8 +737,7 @@ uint8_t gpioOutPowerDown[3] = {                                               \
                               (GPIOOUT_PULLDOWN   <<PC3_BIT)|               \
                               (GPIOOUT_PULLDOWN   <<PC4_BIT)|               \
                               (GPIOOUT_PULLDOWN   <<PC5_BIT)|               \
-                              (PWRDN_OUT_BUTTON1  <<PC6_BIT)|               \
-                              /* Temp Sensor off */                         \
+                              (GPIOOUT_PULLDOWN  <<PC6_BIT)|               \
                               (GPIOOUT_PULLDOWN   <<PC7_BIT))               \
                             }
 
@@ -829,7 +832,7 @@ uint8_t gpioOutPowerDown[3] = {                                               \
 #define WAKE_ON_PC3   false
 #define WAKE_ON_PC4   false
 #define WAKE_ON_PC5   false
-#define WAKE_ON_PC6   false   //BUTTON1
+#define WAKE_ON_PC6   false
 #define WAKE_ON_PC7   false
 //@} //END OF GPIO Wake Source Definitions
 
