@@ -159,6 +159,7 @@ enum HalBoardLedPins {
  * @brief The actual GPIO BUTTON1 is connected to.  This define should
  * be used whenever referencing BUTTON1.
  */
+// It is definitely BUTTON3 on the D
 #define BUTTON1             PORTB_PIN(0)
 /**
  * @brief The GPIO input register for BUTTON1.
@@ -172,23 +173,23 @@ enum HalBoardLedPins {
 /**
  * @brief The interrupt service routine for BUTTON1.
  */
-#define BUTTON1_ISR         halIrqBIsr
+#define BUTTON1_ISR         halIrqAIsr
 /**
  * @brief The interrupt configuration register for BUTTON1.
  */
-#define BUTTON1_INTCFG      GPIO_INTCFGB
+#define BUTTON1_INTCFG      GPIO_INTCFGA
 /**
  * @brief The interrupt enable bit for BUTTON1.
  */
-#define BUTTON1_INT_EN_BIT  INT_IRQB
+#define BUTTON1_INT_EN_BIT  INT_IRQA
 /**
  * @brief The interrupt flag bit for BUTTON1.
  */
-#define BUTTON1_FLAG_BIT    INT_IRQBFLAG
+#define BUTTON1_FLAG_BIT    INT_IRQAFLAG
 /**
  * @brief The missed interrupt bit for BUTTON1.
  */
-#define BUTTON1_MISS_BIT    INT_MISSIRQB
+#define BUTTON1_MISS_BIT    INT_MISSIRQA
 //@} //END OF BUTTON DEFINITIONS
 
 /** @name Radio HoldOff
@@ -637,14 +638,14 @@ uint16_t gpioCfgPowerUp[6] = {                    \
 uint8_t gpioOutPowerUp[3] = {                                               \
                            ((GPIOOUT_PULLUP     <<PA0_BIT)|               \
                             (0                  <<PA1_BIT)|               \
-                            (0                  <<PA2_BIT)|               \
+                            (GPIOOUT_PULLDOWN   <<PA2_BIT)|               \
                             /* nSSEL is default idle high */              \
-                            (1                  <<PA3_BIT)|               \
-                            (PWRUP_OUT_PTI_EN   <<PA4_BIT)|               \
+                            (GPIOOUT_PULLDOWN   <<PA3_BIT)|               \
+                            (GPIOOUT_PULLUP   <<PA4_BIT)|               \
                             (PWRUP_OUT_PTI_DATA <<PA5_BIT)|               \
-                            (PWRUP_OUT_DFL_RHO  <<PA6_BIT)|               \
                             /* LED default off */                         \
-                            (1                  <<PA7_BIT)),              \
+                            (GPIOOUT_PULLUP     <<PA6_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PA7_BIT)),              \
                            ((1                  <<PB0_BIT)|               \
                             (1                  <<PB1_BIT)|  /* SC1TXD  */\
                             (1                  <<PB2_BIT)|  /* SC1RXD  */\
