@@ -1,6 +1,21 @@
 #ifndef SIMPLE_COMMISSIONING_TYPEDEFS_H
 #define SIMPLE_COMMISSIONING_TYPEDEFS_H
 
+/*! \typedef struct DevicesCommissioningClusters
+    \brief Device's clusters for commissioning
+
+    Storage about device's endpoint and clusters
+    for current commissioning call
+*/
+
+typedef struct DeviceCommissioningClusters {
+  uint16_t *clusters;
+  uint8_t ep;
+  uint8_t clusters_arr_len;
+  uint8_t network_index;
+  bool is_server
+} DevCommClusters_t;
+
 /*! \typedef struct MatchDescriptorReq
     \brief Match Descriptor Request structure
 
@@ -65,10 +80,20 @@ typedef struct StateMachineTask {
   CommissioningState_t (*handler)(void);
 } SMTask_t;
 
-/*! \typedef ClusterID
+/*! \typedef struct StateMachineNextState
     
-    Typedef for a Cluster ID parameter
+    Typedef for storing the next state for the state machine
 */
-typedef uint16_t ClusterID;
+typedef struct StateMachineNextState {
+  CommissioningState_t next_state;
+  CommissioningEvent_t next_event;
+} SMNext_t;
+
+/*! Initial value for the state machine
+*/
+static const SMNext_t INIT_VALUE = {
+  SC_EZ_UNKNOWN,
+  SC_EZEV_UNKNOWN
+};
 
 #endif // SIMPLE_COMMISSIONING_TYPEDEFS_H
