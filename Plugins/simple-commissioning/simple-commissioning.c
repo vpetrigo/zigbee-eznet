@@ -12,8 +12,8 @@
 /*! Simple Commissioning Plugin event declaration */
 EmberEventControl emberAfPluginSimpleCommissioningStateMachineEventControl;
 
-/*! \typedef Handy typedef for the long plugin's event name
-#define emberAfPluginSimpleCommissioningStateMachineEventControl StateMachineEvent
+/*! \typedef Handy typedef for the long plugin's event name */
+#define StateMachineEvent emberAfPluginSimpleCommissioningStateMachineEventControl
 
 /*! Simple Commissioning Plugin event handler declaration*/
 void emberAfPluginSimpleCommissioningStateMachineEventHandler(void);
@@ -21,21 +21,17 @@ void emberAfPluginSimpleCommissioningStateMachineEventHandler(void);
 /// Transit state to SC_EZ_START
 static CommissioningState_t StartCommissioning(void);
 /// TODO: There must be checks whether a device is in a network or not
-/// Transit state to SC_EZ_IDENT_QUERY_SEND
-static CommissioningState_t InitCommissioning(void);
 static CommissioningState_t CheckNetwork(void);
 static CommissioningState_t BroadcastIdentifyQuery(void);
 static CommissioningState_t GotIdentifyRespQuery(void);
 static CommissioningState_t StopCommissioning(void);
 static CommissioningState_t CheckClusters(void);
-/// Transit state to SC_EZ_MATCH
-static CommissioningState_t Matching(void);
 /// Transit state to SC_EZ_BIND
 static CommissioningState_t SetBinding(void);
 static CommissioningState_t UnknownState(void);
 
 /*! State Machine Table */
-static SMTask_t sm_transition_table[] = {
+static const SMTask_t sm_transition_table[] = {
   {SC_EZ_STOP, SC_EZEV_START_COMMISSIONING, &StartCommissioning},
   {SC_EZ_START, SC_EZEV_CHECK_NETWORK, &CheckNetwork},
   {SC_EZ_START, SC_EZEV_BCAST_IDENT_QUERY, &BroadcastIdentifyQuery},
@@ -54,15 +50,17 @@ static SMTask_t sm_transition_table[] = {
 /*! Global for storing current device's commissioning information
  */
 DevCommClusters_t dev_comm_session;
+
 /*! Global for storing next state machine transition
  */
-SMNext_t next_transition = INIT_VALUE;
-
+SMNext_t next_transition = {
+  SC_EZ_UNKNOWN, SC_EZEV_UNKNOWN
+};
 
 /*! Helper inline function for init DeviceCommissioningClusters struct */
-static inline InitDCC(DevCommClusters_t *dcc, uint8_t ep, bool is_server,
-                      uint16_t *clusters_arr, uint8t clusters_arr_len) {
-  dcc->clusters = clusters_list;
+static inline void InitDCC(DevCommClusters_t *dcc, const uint8_t ep, const bool is_server,
+                      const uint16_t *clusters_arr, const uint8_t clusters_arr_len) {
+  dcc->clusters = clusters_arr;
   dcc->ep = ep;
   dcc->clusters_arr_len = clusters_arr_len;
   // Get a network index for the requested endpoint
@@ -71,23 +69,23 @@ static inline InitDCC(DevCommClusters_t *dcc, uint8_t ep, bool is_server,
 }
 
 /*! Helper inline function for getting next state */
-static inline GetNextState(void) {
-  return next_transition->next_state;
+static inline CommissioningState_t GetNextState(void) {
+  return next_transition.next_state;
 }
 
 /*! Helper inline function for getting next event */
-static inline GetNextEvent(void) {
-  return next_transition->next_event;
+static inline CommissioningEvent_t GetNextEvent(void) {
+  return next_transition.next_event;
 }
 
 /*! Helper inline function for setting next state */
-static inline SetNextState(const CommissioningState_t cstate) {
-  next_transition->next_state = cstate;
+static inline void SetNextState(const CommissioningState_t cstate) {
+  next_transition.next_state = cstate;
 }
 
 /*! Helper inline function for setting next event */
-static inline SetNextEvent(const CommissioningEvent_t cevent) {
-  next_transition->next_event = cevent;
+static inline void SetNextEvent(const CommissioningEvent_t cevent) {
+  next_transition.next_event = cevent;
 }
 
 /*! State Machine function */
@@ -96,11 +94,11 @@ void emberAfPluginSimpleCommissioningStateMachineEventHandler(void) {
   // That might happened that ZigBee state machine changed current network
   // So, it is important to switch to the proper network before commissioning
   // state machine might start
-  EmberStatus status = emberAfPushNetworkIndex(dev_comm_session->network_index);
+  EmberStatus status = emberAfPushNetworkIndex(dev_comm_session.network_index);
   if (status != EMBER_SUCCESS) {
     // TODO: Handle unavailability of switching network
   }
-  
+  emberAfDebugPrintln("DEBUG: State Machine");
   // Get state previously set by some handler
   CommissioningState_t cur_state = GetNextState();
   CommissioningEvent_t cur_event = GetNextEvent();
@@ -123,21 +121,21 @@ void emberAfPluginSimpleCommissioningStateMachineEventHandler(void) {
 }
 
 EmberStatus SimpleCommissioningStart(uint8_t endpoint, 
-                              bool is_server, 
-                              const uint16_t *clusters, 
-                              const uint8_t length) {
+                                     bool is_server, 
+                                     const uint16_t *clusters, 
+                                     uint8_t length) {
   if (!clusters || !length) {
     // meaningless call if no ClusterID array was passed or its length
     // is zero
     return EMBER_BAD_ARGUMENT;
   }
-  
+  emberAfDebugPrintln("DEBUG: Call for starting commissioning");
   if (length > emberBindingTableSize) {
     // passed more clusters than the binding table may handle
     // TODO: may be it is worth to track available entrise to write in
     // the binding table
-    emberAfGuaranteedPrint("Warning: ask for bind 0x%X clusters. ", length);
-    emberAfGuaranteedPrintln("Binding table size is 0x%X", emberBindingTableSize);
+    emberAfDebugPrint("Warning: ask for bind 0x%X clusters. ", length);
+    emberAfDebugPrintln("Binding table size is 0x%X", emberBindingTableSize);
   }
   
   InitDCC(&dev_comm_session, endpoint, is_server, clusters, length);
@@ -161,10 +159,13 @@ boolean emberAfIdentifyClusterIdentifyQueryResponseCallback(int16u timeout) {
   // ignore broadcasts from yourself and from devices that are not
   // in the identifying state
   if (emberAfGetNodeId() != emberAfCurrentCommand()->source && timeout != 0) {
-    if () {
-      matching_node.source = emberAfCurrentCommand()->source;
-      matching_node.source_ep = emberAfCurrentCommand()->apsFrame->sourceEndpoint;
-    }
+    emberAfDebugPrintln("DEBUG: Got ID Query response");
+    emberAfDebugPrintln("DEBUG: Sender 0x%X", emberAfCurrentCommand()->source);
+    // DEBUG SECTION
+    SetNextState(SC_EZ_UNKNOWN);
+    SetNextEvent(SC_EZEV_UNKNOWN);
+    
+    emberEventControlSetActive(StateMachineEvent);
   }
   
   return TRUE;
@@ -172,6 +173,7 @@ boolean emberAfIdentifyClusterIdentifyQueryResponseCallback(int16u timeout) {
 
 /*! State Machine handlers implementation */
 static CommissioningState_t StartCommissioning(void) {
+  emberAfDebugPrintln("DEBUG: Commissioning Start");
   // TODO: here we might add some sanity check like cluster existense
   // or something like that, but now just start commissioning process
   SetNextEvent(SC_EZEV_CHECK_NETWORK);
@@ -181,13 +183,14 @@ static CommissioningState_t StartCommissioning(void) {
 }
 
 static CommissioningState_t CheckNetwork(void) {
+  emberAfDebugPrintln("DEBUG: Check Network state");
   // TODO: Here it is necessary to check whether the device in
   // the network or not
   CommissioningState_t next_st = SC_EZ_UNKNOWN;
   CommissioningEvent_t next_ev = SC_EZEV_UNKNOWN;
   EmberNetworkStatus nw_status = emberNetworkState();
+  
   if (nw_status == EMBER_JOINED_NETWORK) {
-    
     next_st = SC_EZ_START;
     next_ev = SC_EZEV_BCAST_IDENT_QUERY;    
   }
@@ -208,11 +211,52 @@ static CommissioningState_t CheckNetwork(void) {
 }
 
 static CommissioningState_t BroadcastIdentifyQuery(void) {
+  emberAfDebugPrintln("DEBUG: Broadcast ID Query");
   // Make Identify cluster's command to send an Identify Query
   emberAfFillCommandIdentifyClusterIdentifyQuery();
-  emberAfSetCommandEndpoints(dev_comm_session->ep, EMBER_BROADCAST_ENDPOINT);
-  // Broadcast Identify Query and wait for approptiate callback
-  EmberStatus status = emberAfSendCommandBroadcastWithCallback(EMBER_SLEEPY_BROADCAST_ADDRESS,
-                                                               IdentifyQueryMessageSentCallback);
+  emberAfSetCommandEndpoints(dev_comm_session.ep, EMBER_BROADCAST_ENDPOINT);
+  // Broadcast Identify Query
+  EmberStatus status = emberAfSendCommandBroadcast(EMBER_SLEEPY_BROADCAST_ADDRESS);
+
+  if (status != EMBER_SUCCESS) {
+    // Exceptional case. Stop commissioning
+    SetNextEvent(SC_EZEV_UNKNOWN);
+    
+    return SC_EZ_UNKNOWN;
+  }
   
+  // Schedule event for awaiting for responses for 1 second
+  // TODO: Set hardcoded value as plugin's option parameter as optional value
+  emberEventControlSetDelayMS(StateMachineEvent, 1000);
+  // If Identify Query responses won't be received state machine just will call
+  // Timeout handler
+  SetNextEvent(SC_EZEV_TIMEOUT);
+  
+  return SC_EZ_WAIT_IDENT_RESP;
+}
+
+static CommissioningState_t UnknownState(void) {
+  emberAfDebugPrintln("DEBUG: Unknown State handler");
+  
+  return SC_EZ_STOP;
+}
+
+static CommissioningState_t GotIdentifyRespQuery(void) {
+  return SC_EZ_UNKNOWN;
+}
+
+static CommissioningState_t CheckClusters(void) {
+  return SC_EZ_UNKNOWN;
+}
+
+static CommissioningState_t SetBinding(void) {
+  return SC_EZ_UNKNOWN;
+}
+
+static CommissioningState_t StopCommissioning(void) {
+  emberAfDebugPrintln("DEBUG: Stop commissioning");
+  emberAfDebugPrintln("Current state is 0x%X", GetNextState());
+  SetNextEvent(SC_EZEV_UNKNOWN);
+  
+  return SC_EZ_UNKNOWN;
 }
