@@ -24,11 +24,15 @@ typedef struct DeviceCommissioningClusters {
     for further Binding state
 */
 typedef struct MatchDescriptorReq {
-  /// Node short ID
+  /// Node's clusters list
+  const uint16_t *source_cl_arr;
+  /// Node's clusters list length
+  uint8_t source_cl_arr_len;
+  /// Node's short ID
   EmberNodeId source;
-  /// Node EUI64 (uint8_t[EUI64_SIZE] type)
+  /// Node's EUI64 (uint8_t[EUI64_SIZE] type)
   EmberEUI64 source_eui64;
-  /// Node endpoint
+  /// Node's endpoint
   uint8_t source_ep;
 } MatchDescriptorReq_t;
 
