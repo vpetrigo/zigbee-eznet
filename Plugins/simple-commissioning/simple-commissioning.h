@@ -7,8 +7,8 @@
 
 /*! Commisioning start functions */
 EmberStatus SimpleCommissioningStart(uint8_t endpoint, 
-                              bool is_server, 
-                              const uint16_t *clusters, 
-                              const uint8_t length);
+                                     bool is_server,
+                                     const uint16_t *clusters, 
+                                     uint8_t length);
 
 #endif // SIMPLE_COMMISSIONING_PLUGIN_H
