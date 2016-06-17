@@ -30,6 +30,9 @@ static CommissioningState_t CheckClusters(void);
 static CommissioningState_t SetBinding(void);
 static CommissioningState_t UnknownState(void);
 
+/*! Callback for Service Discovery Request */
+static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result);
+
 /*! State Machine Table */
 static const SMTask_t sm_transition_table[] = {
   {SC_EZ_STOP, SC_EZEV_START_COMMISSIONING, &StartCommissioning},
@@ -56,6 +59,10 @@ DevCommClusters_t dev_comm_session;
 SMNext_t next_transition = {
   SC_EZ_UNKNOWN, SC_EZEV_UNKNOWN
 };
+
+/*! Global for storing incoming device's info (Short ID, EUI64, endpoint)
+ */
+MatchDescriptorReq_t incoming_conn;
 
 /*! Helper inline function for init DeviceCommissioningClusters struct */
 static inline void InitDCC(DevCommClusters_t *dcc, const uint8_t ep, const bool is_server,
@@ -86,6 +93,24 @@ static inline void SetNextState(const CommissioningState_t cstate) {
 /*! Helper inline function for setting next event */
 static inline void SetNextEvent(const CommissioningEvent_t cevent) {
   next_transition.next_event = cevent;
+}
+
+/*! Helper inline function for setting an incoming connection info
+    during the Identify Query Response
+*/
+static inline void SetInConnBaseInfo(const EmberNodeId short_id, 
+                                     const uint8_t endpoint) {
+  incoming_conn.source = short_id;
+  incoming_conn.source_ep = endpoint;
+}
+
+/*! Helper inline function for setting an incoming connection device's
+    clusters list and length of that list
+*/
+static inline void SetInDevicesClustersInfo(const uint16_t *clusters_list, 
+                                     const uint8_t clusters_list_len) {
+  incoming_conn.source_cl_arr = clusters_list;
+  incoming_conn.source_cl_arr_len = clusters_list_len;
 }
 
 /*! State Machine function */
@@ -156,15 +181,25 @@ EmberStatus SimpleCommissioningStart(uint8_t endpoint,
  * @param timeout   Ver.: always
  */
 boolean emberAfIdentifyClusterIdentifyQueryResponseCallback(int16u timeout) {
+  // TODO: !!! IMPORTANT !!! add  handling for several responses
+  // now the state machine might be broken as we use only one global variable
+  // for storing incoming connection information like Short ID and endpoint
+  // 
   // ignore broadcasts from yourself and from devices that are not
   // in the identifying state
-  if (emberAfGetNodeId() != emberAfCurrentCommand()->source && timeout != 0) {
+  const EmberAfClusterCommand * const current_cmd = emberAfCurrentCommand();
+  if (emberAfGetNodeId() != current_cmd->source && timeout != 0) {
     emberAfDebugPrintln("DEBUG: Got ID Query response");
     emberAfDebugPrintln("DEBUG: Sender 0x%X", emberAfCurrentCommand()->source);
-    // DEBUG SECTION
-    SetNextState(SC_EZ_UNKNOWN);
-    SetNextEvent(SC_EZEV_UNKNOWN);
+    // Store information about endpoint and short ID of the incoming response
+    // for further processing in the Matching (SC_EZ_MATCH) state
+    SetInConnBaseInfo(current_cmd->source,
+                      current_cmd->apsFrame->sourceEndpoint);
+    // ID Query received -> go to the discover state for getting clusters info
+    SetNextState(SC_EZ_DISCOVER);
+    SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
     
+    emberAfSendImmediateDefaultResponse(EMBER_ZCL_STATUS_SUCCESS);
     emberEventControlSetActive(StateMachineEvent);
   }
   
@@ -184,8 +219,7 @@ static CommissioningState_t StartCommissioning(void) {
 
 static CommissioningState_t CheckNetwork(void) {
   emberAfDebugPrintln("DEBUG: Check Network state");
-  // TODO: Here it is necessary to check whether the device in
-  // the network or not
+  
   CommissioningState_t next_st = SC_EZ_UNKNOWN;
   CommissioningEvent_t next_ev = SC_EZEV_UNKNOWN;
   EmberNetworkStatus nw_status = emberNetworkState();
@@ -242,11 +276,52 @@ static CommissioningState_t UnknownState(void) {
 }
 
 static CommissioningState_t GotIdentifyRespQuery(void) {
+  emberAfDebugPrintln("DEBUG: Got Identify Response Query handler");
+    
   return SC_EZ_UNKNOWN;
 }
 
 static CommissioningState_t CheckClusters(void) {
-  return SC_EZ_UNKNOWN;
+  emberAfDebugPrintln("DEBUG: Check Clusters handler");
+  // ask a responded device for providing with info about clusters and call
+  // the callback
+  EmberStatus status = emberAfFindClustersByDeviceAndEndpoint(incoming_conn.source,
+                                                              incoming_conn.source_ep,
+                                                              ProcessServiceDiscovery);
+  
+  // Nothing to do here with states as the next event will become clear
+  // during the ProcessServiceDiscovery callback call
+  SetNextEvent(SC_EZEV_UNKNOWN);
+  
+  return (status != EMBER_SUCCESS) ? SC_EZ_UNKNOWN : SC_EZ_DISCOVER;
+}
+
+/*! Callback for Service Discovery Request */
+static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result) {
+  // if we get a matche or a default response handle it
+  // otherwise stop commissioning or go to the next incoming device
+  if (emberAfHaveDiscoveryResponseStatus(result->status)) {
+    EmberAfClusterList *discovered_clusters = (EmberAfClusterList *) result->responseData;
+    
+    // if our device requested to bind to server clusters (is_server parameter
+    // during the SimpleCommissioningStart was FALSE) -> use inClusterList of
+    // the incoming device's response
+    // otherwise -> outClusterList (as our device has server clusters)
+    const uint16_t *inc_clusters_arr = (dev_comm_session.is_server) ? 
+      discovered_clusters->outClusterList :
+      discovered_clusters->inClusterList;
+    // get correct lenght of the incoming clusters array
+    const uint8_t inc_clusters_arr_len = (dev_comm_session.is_server) ? 
+      discovered_clusters->outClusterCount :
+      discovered_clusters->inClusterCount;
+    // update our incoming device structure with information about clusters
+    SetInDevicesClustersInfo(inc_clusters_arr, inc_clusters_arr_len);
+    
+    SetNextEvent(SC_EZEV_BAD_DISCOVER);
+  }
+  else {
+    SetNextEvent(SC_EZEV_BAD_DISCOVER);
+  }
 }
 
 static CommissioningState_t SetBinding(void) {
