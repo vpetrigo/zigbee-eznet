@@ -9,11 +9,11 @@
 */
 
 typedef struct DeviceCommissioningClusters {
-  uint16_t *clusters;
+  const uint16_t *clusters;
   uint8_t ep;
   uint8_t clusters_arr_len;
   uint8_t network_index;
-  bool is_server
+  bool is_server;
 } DevCommClusters_t;
 
 /*! \typedef struct MatchDescriptorReq
@@ -88,12 +88,5 @@ typedef struct StateMachineNextState {
   CommissioningState_t next_state;
   CommissioningEvent_t next_event;
 } SMNext_t;
-
-/*! Initial value for the state machine
-*/
-static const SMNext_t INIT_VALUE = {
-  SC_EZ_UNKNOWN,
-  SC_EZEV_UNKNOWN
-};
 
 #endif // SIMPLE_COMMISSIONING_TYPEDEFS_H
