@@ -42,6 +42,22 @@ typedef struct MatchDescriptorReq {
   uint8_t source_ep;
 } MatchDescriptorReq_t;
 
+/*! \typedef struct RemoteSkipClusters
+    \brief Remote skip clusters structure
+    that help to skip already binded or currently not represented
+    clusters on the device
+      
+    In the current implementation up to 16 clusters in a list might
+    be processed
+*/
+typedef struct RemoteSkipClusters {
+  /// bit representation of which cluster must be skipped
+  /// in the remote clusters list
+  uint16_t skip_clusters;
+  /// length of the bit mask
+  uint16_t len;
+} RemoteSkipClusters_t;
+
 /*! \typedef enum CommissioningStates
     \brief Commissioning States
 
