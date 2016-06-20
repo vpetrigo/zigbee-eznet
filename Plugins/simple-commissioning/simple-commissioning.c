@@ -342,7 +342,6 @@ static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result)
       discovered_clusters->inClusterCount;
     // update our incoming device structure with information about clusters
     SetInDevicesClustersInfo(inc_clusters_arr, inc_clusters_arr_len);
-    
     // Now we have all information about responded device's clusters
     // Start matching procedure for checking how much of them fit for our
     // device
@@ -358,6 +357,7 @@ static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result)
 
 static CommissioningState_t SetBinding(void) {
   emberAfDebugPrintln("DEBUG: Set Binding");
+  // here we add bindings to the binding table
   
   return SC_EZ_UNKNOWN;
 }
@@ -370,7 +370,7 @@ static CommissioningState_t StopCommissioning(void) {
   return SC_EZ_UNKNOWN;
 }
 
-static void MarkDuplicateMathes(void) {
+static void MarkDuplicateMatches(void) {
   // Check if we already have any from requested clusters from a remote
   EmberBindingTableEntry entry = {0};
   // flag for checking whether we met an incoming cluster in the binding table
@@ -382,12 +382,12 @@ static void MarkDuplicateMathes(void) {
   // run through the incoming device's clusters list and check if 
   // we already have any binding entries
   for (size_t i = 0; i < incoming_conn.source_cl_arr_len; ++i) {
-    for (size_t j = 0; j < emberBindingTableSize && emberBindingIsActive(j); ++j) {
+    for (size_t j = 0; j < emberBindingTableSize; ++j) {
       if (emberGetBinding(j, &entry) != EMBER_SUCCESS) {
-        emberAfDebugPrintln("DEBUG: Cannot get binding entry");
         break;
       }
-      if (entry.local == dev_comm_session.ep &&
+      if (entry.type != EMBER_UNUSED_BINDING &&
+          entry.local == dev_comm_session.ep &&
           entry.clusterId == incoming_conn.source_cl_arr[j] &&
           entry.remote == incoming_conn.source_ep &&
           MEMCOMPARE(entry.identifier, incoming_conn.source_eui64, EUI64_SIZE)) {
@@ -422,13 +422,16 @@ static CommissioningState_t MatchingCheck(void) {
   emberAfDebugPrintln("DEBUG: Matching Check");
   // check the clusters list of the current device in the EZ state
   // with the clusters list was got from a remote.
-  MarkDuplicateMathes();
+  MarkDuplicateMatches();
   // nothing to do if we unmarked all clusters
   if (GetRemoteSkipMask() == 0) {
     SetNextEvent(SC_EZEV_BINDING_DONE);
   }
-  
-  SetNextEvent(SC_EZEV_BIND);
+  else {
+    SetNextEvent(SC_EZEV_BIND);
+  }
+
+  emberAfDebugPrintln("DEBUG: Supported clusters 0x%X", skip_mask.skip_clusters);
   emberEventControlSetActive(StateMachineEvent);
   
   return SC_EZ_BIND;
