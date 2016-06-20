@@ -4,15 +4,21 @@
 /*! \typedef struct DevicesCommissioningClusters
     \brief Device's clusters for commissioning
 
-    Storage about device's endpoint and clusters
+    Storage for device's endpoint and clusters
     for current commissioning call
 */
 
 typedef struct DeviceCommissioningClusters {
+  /// Clusters list
   const uint16_t *clusters;
+  /// Device's endpoint
   uint8_t ep;
+  /// Lenght of the clusters list
   uint8_t clusters_arr_len;
+  /// Network index of current endpoint
   uint8_t network_index;
+  /// flag whether should be used server clusters
+  /// from an Identify Query response or client ones
   bool is_server;
 } DevCommClusters_t;
 
