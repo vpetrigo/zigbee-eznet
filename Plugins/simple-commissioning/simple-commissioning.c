@@ -42,6 +42,18 @@ static inline uint16_t GetRemoteSkipMask(void);
 /// Check if it is necessary to skip a cluster in @pos
 static inline bool IsSkipCluster(uint16_t pos);
 
+/// Functions for checking which clusters on the remote device we want to bind
+/// and checking if the binding already exists in the binding table
+/// Check whether our device support some incoming clusters for the passing list.
+/// Called during the SC_EZ_DISCOVER state when got a SIMPLE_DESCRIPTOR response
+static inline uint8_t CheckSupportedClusters(const uint16_t *incoming_cl_list,
+                                          const uint8_t incoming_cl_list_len);
+
+/// Check whether our device already has some bindings in the binding table
+/// Called during the SC_EZ_MATCH state for checking whether we already have 
+/// all necessary bindings or not
+static void MarkDuplicateMatches(void);
+
 /*! Callback for Service Discovery Request */
 static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result);
 
@@ -81,6 +93,9 @@ MatchDescriptorReq_t incoming_conn;
     skipped
  */
 RemoteSkipClusters_t skip_mask;
+
+const uint16_t *CLUSTER_INFO_DEBUG = NULL;
+uint8_t CLUSTER_INFO_LEN_DEBUG = 0;
 
 /*! Helper inline function for init DeviceCommissioningClusters struct */
 static inline void InitDeviceCommissionInfo(DevCommClusters_t *dcc, const uint8_t ep, const bool is_server,
@@ -128,9 +143,20 @@ static inline void SetInConnBaseInfo(const EmberNodeId short_id,
     clusters list and length of that list
 */
 static inline void SetInDevicesClustersInfo(const uint16_t *clusters_list, 
-                                     const uint8_t clusters_list_len) {
-  incoming_conn.source_cl_arr = clusters_list;
-  incoming_conn.source_cl_arr_len = clusters_list_len;
+                                     const uint8_t clusters_list_len,
+                                     const uint8_t supported_clusters) {
+  incoming_conn.source_cl_arr_len = supported_clusters;
+  uint8_t supported_cluster_idx = 0;
+  
+  for (size_t i = 0; i < clusters_list_len; ++i) {
+    // if we want to bind to that cluster (appropriate bit in the cluster
+    // mask is 1), add it
+    if (!IsSkipCluster(i)) {
+      emberAfDebugPrintln("DEBUG: Supported cluster 0x%X%X", HIGH_BYTE(clusters_list[i]),
+                          LOW_BYTE(clusters_list[i]));
+      incoming_conn.source_cl_arr[supported_cluster_idx++] = clusters_list[i];
+    }
+  }
 }
 
 /*! State Machine function */
@@ -340,13 +366,30 @@ static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result)
     const uint8_t inc_clusters_arr_len = (dev_comm_session.is_server) ? 
       discovered_clusters->outClusterCount :
       discovered_clusters->inClusterCount;
-    // update our incoming device structure with information about clusters
-    SetInDevicesClustersInfo(inc_clusters_arr, inc_clusters_arr_len);
-    // Now we have all information about responded device's clusters
-    // Start matching procedure for checking how much of them fit for our
-    // device
-    SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
-    SetNextState(SC_EZ_MATCH);
+    CLUSTER_INFO_DEBUG = inc_clusters_arr;
+    CLUSTER_INFO_LEN_DEBUG = inc_clusters_arr_len;
+    // init clusters skip mask length for further using
+    InitRemoteSkipCluster(inc_clusters_arr_len);
+    // check how much clusters our device wants to bind to
+    uint8_t supported_clusters = CheckSupportedClusters(inc_clusters_arr, 
+                                                        inc_clusters_arr_len);
+    
+    emberAfDebugPrintln("DEBUG: Supported clusters %d", supported_clusters);
+    if (supported_clusters == 0) {
+      // we should not do anything with that
+      SetNextEvent(SC_EZEV_BINDING_DONE);
+      SetNextState(SC_EZ_BIND);
+    }
+    else {
+      // update our incoming device structure with information about clusters
+      SetInDevicesClustersInfo(inc_clusters_arr, inc_clusters_arr_len,
+                               supported_clusters);
+      // Now we have all information about responded device's clusters
+      // Start matching procedure for checking how much of them fit for our
+      // device
+      SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
+      SetNextState(SC_EZ_MATCH);
+    }
   }
   else {
     SetNextEvent(SC_EZEV_BAD_DISCOVER);
@@ -401,7 +444,7 @@ static CommissioningState_t SetBinding(void) {
         SetNextEvent(SC_EZEV_UNKNOWN);
         break;
       }
-      
+
       EmberBindingTableEntry new_binding;
       InitBindingTableEntry(incoming_conn.source_eui64, 
                             incoming_conn.source_cl_arr[i],
@@ -430,6 +473,12 @@ static CommissioningState_t SetBinding(void) {
 static CommissioningState_t StopCommissioning(void) {
   emberAfDebugPrintln("DEBUG: Stop commissioning");
   emberAfDebugPrintln("Current state is 0x%X", GetNextState());
+  
+  for (size_t i = 0; i < CLUSTER_INFO_LEN_DEBUG; ++i) {
+    emberAfDebugPrintln("DEBUG: cluster id 0x%X%X", HIGH_BYTE(CLUSTER_INFO_DEBUG[i]),
+                          LOW_BYTE(CLUSTER_INFO_DEBUG[i]));
+  }
+  
   SetNextEvent(SC_EZEV_UNKNOWN);
   
   return SC_EZ_UNKNOWN;
@@ -438,12 +487,6 @@ static CommissioningState_t StopCommissioning(void) {
 static void MarkDuplicateMatches(void) {
   // Check if we already have any from requested clusters from a remote
   EmberBindingTableEntry entry = {0};
-  // flag for checking whether we met an incoming cluster in the binding table
-  // or not
-  bool in_binding = false;
-  
-  // init clusters skip mask length
-  InitRemoteSkipCluster(incoming_conn.source_cl_arr_len);
   // run through the incoming device's clusters list and check if 
   // we already have any binding entries
   for (size_t i = 0; i < incoming_conn.source_cl_arr_len; ++i) {
@@ -451,42 +494,27 @@ static void MarkDuplicateMatches(void) {
       if (emberGetBinding(j, &entry) != EMBER_SUCCESS) {
         break;
       }
+      // if a binding entry not marked as unused and
+      // current info are the same as in a request
       if (entry.type != EMBER_UNUSED_BINDING &&
           entry.local == dev_comm_session.ep &&
-          entry.clusterId == incoming_conn.source_cl_arr[j] &&
+          entry.clusterId == incoming_conn.source_cl_arr[i] &&
           entry.remote == incoming_conn.source_ep &&
-          MEMCOMPARE(entry.identifier, incoming_conn.source_eui64, EUI64_SIZE)) {
+          MEMCOMPARE(entry.identifier, incoming_conn.source_eui64, EUI64_SIZE) == 0) 
+      {
         SkipRemoteCluster(i);
-        in_binding = true;
         break;
       }
     }
-    
-    if (!in_binding) {
-      // check whether we want a remote cluster to bind
-      bool unused = true;
-      // just run through the current device's cluster list and if 
-      // that incoming cluster exists on our device then don't exclude it
-      for (size_t j = 0; j < dev_comm_session.clusters_arr_len; ++j) {
-        if (incoming_conn.source_cl_arr[i] == dev_comm_session.clusters[j]) {
-          unused = false;
-          break;
-        }
-      }
-      
-      if (unused) {
-        SkipRemoteCluster(i);
-      }
-    }
-    
-    in_binding = false;
   }
 }
 
 static CommissioningState_t MatchingCheck(void) {
   emberAfDebugPrintln("DEBUG: Matching Check");
-  // check the clusters list of the current device in the EZ state
-  // with the clusters list was got from a remote.
+  // init clusters skip mask length for checking for duplicates in the binding
+  // table
+  InitRemoteSkipCluster(incoming_conn.source_cl_arr_len);
+  // check the supported clusters list for existence in the binding table
   MarkDuplicateMatches();
   // nothing to do if we unmarked all clusters
   if (GetRemoteSkipMask() == 0) {
@@ -519,5 +547,32 @@ static inline uint16_t GetRemoteSkipMask(void) {
 }
         
 static inline bool IsSkipCluster(uint16_t pos) {
-  return BIT(pos) & skip_mask.skip_clusters;
+  return !(BIT(pos) & skip_mask.skip_clusters);
+}
+
+static inline uint8_t CheckSupportedClusters(const uint16_t *incoming_cl_list,
+                                          const uint8_t incoming_cl_list_len) {
+  bool unused = true;
+  uint8_t supported_clusters_cnt = 0;
+  
+  for (size_t i = 0; i < incoming_cl_list_len; ++i) {
+    // just run through the current device's cluster list and if 
+    // that incoming cluster exists on our device then don't exclude it
+    for (size_t j = 0; j < dev_comm_session.clusters_arr_len; ++j) {
+      if (incoming_cl_list[i] == dev_comm_session.clusters[j]) {
+        // our device support it
+        ++supported_clusters_cnt;
+        unused = false;
+        break;
+      }
+    }
+    
+    if (unused) {
+      SkipRemoteCluster(i);
+    }
+    
+    unused = true;
+  }
+  
+  return supported_clusters_cnt;
 }
