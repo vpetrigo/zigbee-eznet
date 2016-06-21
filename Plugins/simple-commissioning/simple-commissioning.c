@@ -39,6 +39,8 @@ static inline void InitRemoteSkipCluster(const uint16_t length);
 static inline void SkipRemoteCluster(const uint16_t pos);
 /// Return the skip mask
 static inline uint16_t GetRemoteSkipMask(void);
+/// Check if it is necessary to skip a cluster in @pos
+static inline bool IsSkipCluster(uint16_t pos);
 
 /*! Callback for Service Discovery Request */
 static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result);
@@ -81,7 +83,7 @@ MatchDescriptorReq_t incoming_conn;
 RemoteSkipClusters_t skip_mask;
 
 /*! Helper inline function for init DeviceCommissioningClusters struct */
-static inline void InitDCC(DevCommClusters_t *dcc, const uint8_t ep, const bool is_server,
+static inline void InitDeviceCommissionInfo(DevCommClusters_t *dcc, const uint8_t ep, const bool is_server,
                       const uint16_t *clusters_arr, const uint8_t clusters_arr_len) {
   dcc->clusters = clusters_arr;
   dcc->ep = ep;
@@ -181,7 +183,7 @@ EmberStatus SimpleCommissioningStart(uint8_t endpoint,
     emberAfDebugPrintln("Binding table size is 0x%X", emberBindingTableSize);
   }
   
-  InitDCC(&dev_comm_session, endpoint, is_server, clusters, length);
+  InitDeviceCommissionInfo(&dev_comm_session, endpoint, is_server, clusters, length);
   // Current state is SC_EZ_STOP, so for transiting to the next state
   // set up event accordingly to the transmission table
   SetNextState(SC_EZ_STOP);
@@ -281,8 +283,6 @@ static CommissioningState_t BroadcastIdentifyQuery(void) {
   if (status != EMBER_SUCCESS) {
     // Exceptional case. Stop commissioning
     SetNextEvent(SC_EZEV_UNKNOWN);
-    
-    return SC_EZ_UNKNOWN;
   }
   
   // Schedule event for awaiting for responses for 1 second
@@ -355,11 +355,76 @@ static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result)
   emberEventControlSetActive(StateMachineEvent);
 }
 
+static inline uint8_t FindUnusedBindingIndex(void) {
+  EmberBindingTableEntry entry = {0};
+  
+  for (size_t i = 0; i < emberBindingTableSize; ++i) {
+    if (emberGetBinding(i, &entry) != EMBER_SUCCESS) {
+      // something bad happened with Binding Table
+      emberAfDebugPrintln("DEBUG: error: cannot get the binding entry");
+      return EMBER_APPLICATION_ERROR_0;
+    }
+    
+    if (entry.type == EMBER_UNUSED_BINDING) {
+      return i;
+    }
+  }
+  
+  // Binding table is full
+  return EMBER_APPLICATION_ERROR_1;
+}
+
+static inline void InitBindingTableEntry(const EmberEUI64 remote_eui64,
+                                         const uint16_t cluster_id, 
+                                         EmberBindingTableEntry *entry) {
+  entry->type = EMBER_UNICAST_BINDING;
+  entry->local = dev_comm_session.ep;
+  entry->remote = incoming_conn.source_ep;
+  entry->clusterId = cluster_id;
+  MEMCOPY(entry->identifier, remote_eui64, EUI64_SIZE);
+}
+
 static CommissioningState_t SetBinding(void) {
   emberAfDebugPrintln("DEBUG: Set Binding");
+  EmberStatus status = EMBER_SUCCESS;
   // here we add bindings to the binding table
+  for (size_t i = 0; i < incoming_conn.source_cl_arr_len; ++i) {
+    emberAfDebugPrintln("DEBUG: Incoming clusters list size %d", incoming_conn.source_cl_arr_len);
+    emberAfDebugPrintln("DEBUG: cluster id 0x%X%X", HIGH_BYTE(incoming_conn.source_cl_arr[i]),
+                          LOW_BYTE(incoming_conn.source_cl_arr[i]));
+    if (!IsSkipCluster(i)) {
+      uint8_t bindex = FindUnusedBindingIndex();
+      
+      if (bindex == EMBER_APPLICATION_ERROR_0 ||
+          bindex == EMBER_APPLICATION_ERROR_1) {
+        // error during finding an available binding table index for write to
+        SetNextEvent(SC_EZEV_UNKNOWN);
+        break;
+      }
+      
+      EmberBindingTableEntry new_binding;
+      InitBindingTableEntry(incoming_conn.source_eui64, 
+                            incoming_conn.source_cl_arr[i],
+                            &new_binding);
+      status = emberSetBinding(bindex, &new_binding);
+      if (status == EMBER_SUCCESS) {
+        // Set up the remote short ID for binding for avoiding ZDO broadcast
+        emberSetBindingRemoteNodeId(bindex, incoming_conn.source);
+      }
+      
+      // DEBUG
+      emberGetBinding(bindex, &new_binding);
+      emberAfDebugPrintln("DEBUG: remote ep 0x%X", new_binding.remote);
+      emberAfDebugPrintln("DEBUG: cluster id 0x%X%X", HIGH_BYTE(new_binding.clusterId),
+                          LOW_BYTE(new_binding.clusterId));
+    }
+  }
   
-  return SC_EZ_UNKNOWN;
+  // all bindings successfully added
+  SetNextEvent(SC_EZEV_BINDING_DONE);
+  emberEventControlSetActive(StateMachineEvent);
+  
+  return SC_EZ_BIND;
 }
 
 static CommissioningState_t StopCommissioning(void) {
@@ -451,4 +516,8 @@ static inline void SkipRemoteCluster(const uint16_t pos) {
 
 static inline uint16_t GetRemoteSkipMask(void) {
   return skip_mask.skip_clusters;
+}
+        
+static inline bool IsSkipCluster(uint16_t pos) {
+  return BIT(pos) & skip_mask.skip_clusters;
 }
