@@ -119,6 +119,8 @@ enum HalBoardLedPins {
  * @note The GPIO number must match the IRQ letter
  */
 //@{
+// Enable debouncing in the button ISR handler (see button.c)
+#define DEBOUNCE 5
 /**
  * @brief The actual GPIO BUTTON0 is connected to.  This define should
  * be used whenever referencing BUTTON0.
