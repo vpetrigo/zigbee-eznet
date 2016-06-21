@@ -31,6 +31,7 @@ typedef struct DeviceCommissioningClusters {
 */
 typedef struct MatchDescriptorReq {
   /// Node's clusters list
+  // TODO: add something with that hardcoded value
   uint16_t source_cl_arr[16];
   /// Node's clusters list length
   uint8_t source_cl_arr_len;

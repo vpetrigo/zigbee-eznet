@@ -94,9 +94,6 @@ MatchDescriptorReq_t incoming_conn;
  */
 RemoteSkipClusters_t skip_mask;
 
-const uint16_t *CLUSTER_INFO_DEBUG = NULL;
-uint8_t CLUSTER_INFO_LEN_DEBUG = 0;
-
 /*! Helper inline function for init DeviceCommissioningClusters struct */
 static inline void InitDeviceCommissionInfo(DevCommClusters_t *dcc, const uint8_t ep, const bool is_server,
                       const uint16_t *clusters_arr, const uint8_t clusters_arr_len) {
@@ -196,14 +193,14 @@ EmberStatus SimpleCommissioningStart(uint8_t endpoint,
                                      const uint16_t *clusters, 
                                      uint8_t length) {
   if (!clusters || !length) {
-    // meaningless call if no ClusterID array was passed or its length
+    // meaningless call if ClusterID array was not passed or its length
     // is zero
     return EMBER_BAD_ARGUMENT;
   }
   emberAfDebugPrintln("DEBUG: Call for starting commissioning");
   if (length > emberBindingTableSize) {
     // passed more clusters than the binding table may handle
-    // TODO: may be it is worth to track available entrise to write in
+    // TODO: may be it is worth to track available entries to write in
     // the binding table
     emberAfDebugPrint("Warning: ask for bind 0x%X clusters. ", length);
     emberAfDebugPrintln("Binding table size is 0x%X", emberBindingTableSize);
@@ -432,9 +429,6 @@ static CommissioningState_t SetBinding(void) {
   EmberStatus status = EMBER_SUCCESS;
   // here we add bindings to the binding table
   for (size_t i = 0; i < incoming_conn.source_cl_arr_len; ++i) {
-    emberAfDebugPrintln("DEBUG: Incoming clusters list size %d", incoming_conn.source_cl_arr_len);
-    emberAfDebugPrintln("DEBUG: cluster id 0x%X%X", HIGH_BYTE(incoming_conn.source_cl_arr[i]),
-                          LOW_BYTE(incoming_conn.source_cl_arr[i]));
     if (!IsSkipCluster(i)) {
       uint8_t bindex = FindUnusedBindingIndex();
       
@@ -472,13 +466,7 @@ static CommissioningState_t SetBinding(void) {
 
 static CommissioningState_t StopCommissioning(void) {
   emberAfDebugPrintln("DEBUG: Stop commissioning");
-  emberAfDebugPrintln("Current state is 0x%X", GetNextState());
-  
-  for (size_t i = 0; i < CLUSTER_INFO_LEN_DEBUG; ++i) {
-    emberAfDebugPrintln("DEBUG: cluster id 0x%X%X", HIGH_BYTE(CLUSTER_INFO_DEBUG[i]),
-                          LOW_BYTE(CLUSTER_INFO_DEBUG[i]));
-  }
-  
+  emberAfDebugPrintln("Current state is 0x%X", GetNextState());  
   SetNextEvent(SC_EZEV_UNKNOWN);
   
   return SC_EZ_UNKNOWN;
@@ -524,7 +512,7 @@ static CommissioningState_t MatchingCheck(void) {
     SetNextEvent(SC_EZEV_BIND);
   }
 
-  emberAfDebugPrintln("DEBUG: Supported clusters 0x%X", skip_mask.skip_clusters);
+  emberAfDebugPrintln("DEBUG: Supported clusters mask 0x%X", skip_mask.skip_clusters);
   emberEventControlSetActive(StateMachineEvent);
   
   return SC_EZ_BIND;
