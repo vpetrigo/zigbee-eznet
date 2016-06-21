@@ -148,7 +148,7 @@ static inline void SetInDevicesClustersInfo(const uint16_t *clusters_list,
   for (size_t i = 0; i < clusters_list_len; ++i) {
     // if we want to bind to that cluster (appropriate bit in the cluster
     // mask is 1), add it
-    if (!IsSkipCluster(i)) {
+    if (!IsSkipCluster(i) && supported_cluster_idx < INCOMING_DEVICE_CLUSTERS_LIST_LEN) {
       emberAfDebugPrintln("DEBUG: Supported cluster 0x%X%X", HIGH_BYTE(clusters_list[i]),
                           LOW_BYTE(clusters_list[i]));
       incoming_conn.source_cl_arr[supported_cluster_idx++] = clusters_list[i];
@@ -363,8 +363,6 @@ static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result)
     const uint8_t inc_clusters_arr_len = (dev_comm_session.is_server) ? 
       discovered_clusters->outClusterCount :
       discovered_clusters->inClusterCount;
-    CLUSTER_INFO_DEBUG = inc_clusters_arr;
-    CLUSTER_INFO_LEN_DEBUG = inc_clusters_arr_len;
     // init clusters skip mask length for further using
     InitRemoteSkipCluster(inc_clusters_arr_len);
     // check how much clusters our device wants to bind to

@@ -1,6 +1,13 @@
 #ifndef SIMPLE_COMMISSIONING_TYPEDEFS_H
 #define SIMPLE_COMMISSIONING_TYPEDEFS_H
 
+/*! \define INCOMING_DEVICE_CLUSTERS_LIST_LEN
+  
+    Determine how much supported clusters might be stored 
+    in the internal memory
+*/
+#define INCOMING_DEVICE_CLUSTERS_LIST_LEN 16
+
 /*! \typedef struct DevicesCommissioningClusters
     \brief Device's clusters for commissioning
 
@@ -32,7 +39,7 @@ typedef struct DeviceCommissioningClusters {
 typedef struct MatchDescriptorReq {
   /// Node's clusters list
   // TODO: add something with that hardcoded value
-  uint16_t source_cl_arr[16];
+  uint16_t source_cl_arr[INCOMING_DEVICE_CLUSTERS_LIST_LEN];
   /// Node's clusters list length
   uint8_t source_cl_arr_len;
   /// Node's short ID
