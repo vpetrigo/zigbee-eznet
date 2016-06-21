@@ -319,7 +319,7 @@ static CommissioningState_t BroadcastIdentifyQuery(void) {
 }
 
 static CommissioningState_t UnknownState(void) {
-  emberAfDebugPrintln("DEBUG: Unknown State handler");
+  emberAfDebugPrintln("DEBUG: Unknown operation requested on stage 0x%X", GetNextState());
   
   return SC_EZ_STOP;
 }
