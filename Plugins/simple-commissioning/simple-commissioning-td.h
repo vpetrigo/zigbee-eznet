@@ -6,7 +6,7 @@
     Determine how much supported clusters might be stored 
     in the internal memory
 */
-#define INCOMING_DEVICE_CLUSTERS_LIST_LEN 16
+#define INCOMING_DEVICE_CLUSTERS_LIST_LEN EMBER_AF_PLUGIN_SIMPLE_COMMISSIONING_COMMISSIONING_CLUSTERS_LIST_LEN
 
 /*! \typedef struct DevicesCommissioningClusters
     \brief Device's clusters for commissioning
@@ -38,7 +38,6 @@ typedef struct DeviceCommissioningClusters {
 */
 typedef struct MatchDescriptorReq {
   /// Node's clusters list
-  // TODO: add something with that hardcoded value
   uint16_t source_cl_arr[INCOMING_DEVICE_CLUSTERS_LIST_LEN];
   /// Node's clusters list length
   uint8_t source_cl_arr_len;
