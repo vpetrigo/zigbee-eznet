@@ -21,16 +21,15 @@ void emberAfPluginSimpleCommissioningStateMachineEventHandler(void);
 /// Functions for handling different states
 /// Transit state to SC_EZ_START
 static CommissioningState_t StartCommissioning(void);
-/// TODO: There must be checks whether a device is in a network or not
 static CommissioningState_t CheckNetwork(void);
 static CommissioningState_t BroadcastIdentifyQuery(void);
-static CommissioningState_t GotIdentifyRespQuery(void);
 static CommissioningState_t StopCommissioning(void);
 static CommissioningState_t CheckClusters(void);
 static CommissioningState_t MatchingCheck(void);
 /// Transit state to SC_EZ_BIND
 static CommissioningState_t SetBinding(void);
 static CommissioningState_t UnknownState(void);
+static CommissioningState_t FormJoinNetwork(void);
 
 /// Functions for working with RemoteSkipClusters
 /// Initialize global struct RemoteSkipClusters variable
@@ -41,6 +40,15 @@ static inline void SkipRemoteCluster(const uint16_t pos);
 static inline uint16_t GetRemoteSkipMask(void);
 /// Check if it is necessary to skip a cluster in @pos
 static inline bool IsSkipCluster(uint16_t pos);
+
+/// Function for working with network attempts variable
+/// Get current attempt
+static inline uint8_t GetNetworkTries(void);
+/// Increment current attempt
+static inline void IncNetworkTries(void);
+/// Clear variable
+static inline void ClearNetworkTries(void);
+
 
 /// Functions for checking which clusters on the remote device we want to bind
 /// and checking if the binding already exists in the binding table
@@ -62,7 +70,8 @@ static const SMTask_t sm_transition_table[] = {
   {SC_EZ_STOP, SC_EZEV_START_COMMISSIONING, &StartCommissioning},
   {SC_EZ_START, SC_EZEV_CHECK_NETWORK, &CheckNetwork},
   {SC_EZ_START, SC_EZEV_BCAST_IDENT_QUERY, &BroadcastIdentifyQuery},
-  {SC_EZ_WAIT_IDENT_RESP, SC_EZEV_GOT_RESP, &GotIdentifyRespQuery},
+  {SC_EZ_START, SC_EZEV_FORM_JOIN_NETWORK, &FormJoinNetwork},
+  {SC_EZ_START, SC_EZEV_NETWORK_FAILED, &StopCommissioning},
   {SC_EZ_WAIT_IDENT_RESP, SC_EZEV_TIMEOUT, &StopCommissioning},
   {SC_EZ_DISCOVER, SC_EZEV_CHECK_CLUSTERS, &CheckClusters},
   {SC_EZ_DISCOVER, SC_EZEV_BAD_DISCOVER, &StopCommissioning},
@@ -84,6 +93,16 @@ DevCommClusters_t dev_comm_session;
 SMNext_t next_transition = {
   SC_EZ_UNKNOWN, SC_EZEV_UNKNOWN
 };
+
+/*! Global for storing device's attempts for forming or joining a network
+ */
+static uint8_t network_access_tries = 0;
+
+/*! \define NETWORK_ACCESS_CONS_TRIES
+ *
+ * 	Define is for determining how much consecutive tries are allowed
+ */
+#define NETWORK_ACCESS_CONS_TRIES 3
 
 /*! Global for storing incoming device's info (Short ID, EUI64, endpoint)
  */
@@ -270,29 +289,36 @@ static CommissioningState_t StartCommissioning(void) {
 
 static CommissioningState_t CheckNetwork(void) {
   emberAfDebugPrintln("DEBUG: Check Network state");
-  
-  CommissioningState_t next_st = SC_EZ_UNKNOWN;
-  CommissioningEvent_t next_ev = SC_EZEV_UNKNOWN;
   EmberNetworkStatus nw_status = emberNetworkState();
-  
+  emberAfDebugPrintln("DEBUG: network state 0x%X", nw_status);
+  if (nw_status == EMBER_JOINING_NETWORK ||
+  		nw_status == EMBER_LEAVING_NETWORK) {
+  	// Try to check again after 5 seconds
+  	emberEventControlSetDelayQS(StateMachineEvent, 20);
+
+  	return SC_EZ_START;
+  }
+
   if (nw_status == EMBER_JOINED_NETWORK) {
-    next_st = SC_EZ_START;
-    next_ev = SC_EZEV_BCAST_IDENT_QUERY;    
+    SetNextEvent(SC_EZEV_BCAST_IDENT_QUERY);
+    // Send Permit Join broadcast to the current network
+    // in case of ZED nothing will happen
+    // TODO: Make this hadrcoded value as plugin's option
+    emberAfPermitJoin(180, TRUE);
   }
-  else if (nw_status == EMBER_NO_NETWORK) {
-    // Form or join available network, but now just stop commissioning
+  else if (nw_status == EMBER_NO_NETWORK && GetNetworkTries() < NETWORK_ACCESS_CONS_TRIES) {
+    // Form or join available network
+  	SetNextEvent(SC_EZEV_FORM_JOIN_NETWORK);
   }
-  
-  // Send Permit Join broadcast to the current network
-  // in case of ZED nothing will happen
-  // TODO: Make this hadrcoded value as plugin's option
-  emberAfPermitJoin(180, TRUE);
+  else {
+  	SetNextEvent(SC_EZEV_NETWORK_FAILED);
+  }
+
   // if the device is in the network continue commissioning
   // by sending Identify Query
-  SetNextEvent(next_ev);
   emberEventControlSetActive(StateMachineEvent);
   
-  return next_st;
+  return SC_EZ_START;
 }
 
 static CommissioningState_t BroadcastIdentifyQuery(void) {
@@ -322,12 +348,6 @@ static CommissioningState_t UnknownState(void) {
   emberAfDebugPrintln("DEBUG: Unknown operation requested on stage 0x%X", GetNextState());
   
   return SC_EZ_STOP;
-}
-
-static CommissioningState_t GotIdentifyRespQuery(void) {
-  emberAfDebugPrintln("DEBUG: Got Identify Response Query handler");
-    
-  return SC_EZ_UNKNOWN;
 }
 
 static CommissioningState_t CheckClusters(void) {
@@ -466,6 +486,8 @@ static CommissioningState_t StopCommissioning(void) {
   emberAfDebugPrintln("DEBUG: Stop commissioning");
   emberAfDebugPrintln("Current state is 0x%X", GetNextState());  
   SetNextEvent(SC_EZEV_UNKNOWN);
+  // clean up globals
+  ClearNetworkTries();
   
   return SC_EZ_UNKNOWN;
 }
@@ -561,4 +583,45 @@ static inline uint8_t CheckSupportedClusters(const uint16_t *incoming_cl_list,
   }
   
   return supported_clusters_cnt;
+}
+
+static CommissioningState_t FormJoinNetwork(void) {
+	emberAfDebugPrintln("DEBUG: Form/Join network");
+  // Form or join depends on the device type
+  // Coordinator: form a network
+  // Router/ZED/SED/MED: find a network
+  EmberStatus status = EMBER_SUCCESS;
+
+  if (emAfCurrentZigbeeProNetwork->nodeType == EMBER_COORDINATOR) {
+  	status = emberAfFindUnusedPanIdAndForm();
+  }
+  else {
+  	status = emberAfStartSearchForJoinableNetwork();
+  }
+
+  if (status != EMBER_SUCCESS) {
+  	SetNextEvent(SC_EZEV_UNKNOWN);
+  }
+  else {
+  	SetNextEvent(SC_EZEV_CHECK_NETWORK);
+  }
+
+  IncNetworkTries();
+  // run state machine again after 10 seconds
+  emberEventControlSetDelayQS(StateMachineEvent, 40);
+
+  return SC_EZ_START;
+}
+
+/// Get current attempt
+static inline uint8_t GetNetworkTries(void) {
+	return network_access_tries;
+}
+/// Increment current attempt
+static inline void IncNetworkTries(void) {
+	++network_access_tries;
+}
+/// Clear variable
+static inline void ClearNetworkTries(void) {
+	network_access_tries = 0;
 }
