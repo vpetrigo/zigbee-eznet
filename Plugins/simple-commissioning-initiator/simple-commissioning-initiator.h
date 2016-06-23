@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "../../include/af.h"
+#include "app/framework/include/af.h"
 
 /*! Commisioning start functions */
 EmberStatus SimpleCommissioningStart(uint8_t endpoint, 

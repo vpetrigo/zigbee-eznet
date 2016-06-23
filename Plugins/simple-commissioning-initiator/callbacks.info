@@ -1,0 +1,10 @@
+/** @brief Commissioning done notification
+ *
+ * This function is called by the simple commissioning plugin when 
+ * the commissioning process is done
+ *
+ * @param status   Describe status of the commissioning
+ */
+void emberAfPluginSimpleCommissioningInitiatorStatusCallback(EmberStatus status)
+{
+}

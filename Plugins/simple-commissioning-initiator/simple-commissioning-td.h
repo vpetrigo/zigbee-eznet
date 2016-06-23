@@ -1,12 +1,14 @@
 #ifndef SIMPLE_COMMISSIONING_TYPEDEFS_H
 #define SIMPLE_COMMISSIONING_TYPEDEFS_H
 
+#include "app/framework/include/af.h"
+
 /*! \define INCOMING_DEVICE_CLUSTERS_LIST_LEN
   
     Determine how much supported clusters might be stored 
     in the internal memory
 */
-#define INCOMING_DEVICE_CLUSTERS_LIST_LEN EMBER_AF_PLUGIN_SIMPLE_COMMISSIONING_COMMISSIONING_CLUSTERS_LIST_LEN
+#define INCOMING_DEVICE_CLUSTERS_LIST_LEN EMBER_AF_PLUGIN_SIMPLE_COMMISSIONING_INITIATOR_COMMISSIONING_CLUSTERS_LIST_LEN
 
 /*! \typedef struct DevicesCommissioningClusters
     \brief Device's clusters for commissioning
@@ -88,7 +90,7 @@ typedef enum CommissioningStates {
     have to do in different cases
 */
 typedef enum CommissioningEvents {
-  SC_EZEV_START_COMMISSIONING = 0,
+	SC_EZEV_IDLE = 0,
   SC_EZEV_CHECK_NETWORK,
   SC_EZEV_FORM_JOIN_NETWORK,
   SC_EZEV_BCAST_IDENT_QUERY,
