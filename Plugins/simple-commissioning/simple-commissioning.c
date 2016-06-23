@@ -113,6 +113,34 @@ MatchDescriptorReq_t incoming_conn;
  */
 RemoteSkipClusters_t skip_mask;
 
+/*! \typedef SIMPLE_COMMISSIONING_PERMIT_JOIN_TIME
+ *
+ *  Define time period for which a device permits join for remotes (in second)
+ */
+#define SIMPLE_COMMISSIONING_PERMIT_JOIN_TIME	180
+
+/*! \typedef SIMPLE_COMMISSIONING_NETWORK_CHECK_RETRY_TIME
+ *
+ *  Define time period after which a device will retry network checking
+ *  (in quarterseconds ->  SIMPLE_COMMISSIONING_NETWORK_CHECK_RETRY_TIME * 0.250 s)
+ */
+#define SIMPLE_COMMISSIONING_NETWORK_CHECK_RETRY_TIME	20
+
+/*! \typedef SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME
+ *
+ *  Define time period that is a Identify Query Response await timeout
+ *  (in milliseconds). If our devic don't get any response it will get timeout event
+ */
+#define SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME	1000
+
+/*! \typedef SIMPLE_COMMISSIONING_NETWORK_RETRY_DELAY
+ *
+ *  Define time period after which a device retries to update its network status
+ *  in case it was leaving or joining a network before
+ *  (in quarterseconds)
+ */
+#define SIMPLE_COMMISSIONING_NETWORK_RETRY_DELAY	40
+
 /*! Helper inline function for init DeviceCommissioningClusters struct */
 static inline void InitDeviceCommissionInfo(DevCommClusters_t *dcc, const uint8_t ep, const bool is_server,
                       const uint16_t *clusters_arr, const uint8_t clusters_arr_len) {
@@ -294,7 +322,7 @@ static CommissioningState_t CheckNetwork(void) {
   if (nw_status == EMBER_JOINING_NETWORK ||
   		nw_status == EMBER_LEAVING_NETWORK) {
   	// Try to check again after 5 seconds
-  	emberEventControlSetDelayQS(StateMachineEvent, 20);
+  	emberEventControlSetDelayQS(StateMachineEvent, SIMPLE_COMMISSIONING_NETWORK_RETRY_DELAY);
 
   	return SC_EZ_START;
   }
@@ -304,7 +332,7 @@ static CommissioningState_t CheckNetwork(void) {
     // Send Permit Join broadcast to the current network
     // in case of ZED nothing will happen
     // TODO: Make this hadrcoded value as plugin's option
-    emberAfPermitJoin(180, TRUE);
+    emberAfPermitJoin(SIMPLE_COMMISSIONING_PERMIT_JOIN_TIME, TRUE);
   }
   else if (nw_status == EMBER_NO_NETWORK && GetNetworkTries() < NETWORK_ACCESS_CONS_TRIES) {
     // Form or join available network
@@ -336,7 +364,7 @@ static CommissioningState_t BroadcastIdentifyQuery(void) {
   
   // Schedule event for awaiting for responses for 1 second
   // TODO: Set hardcoded value as plugin's option parameter as optional value
-  emberEventControlSetDelayMS(StateMachineEvent, 1000);
+  emberEventControlSetDelayMS(StateMachineEvent, SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME);
   // If Identify Query responses won't be received state machine just will call
   // Timeout handler
   SetNextEvent(SC_EZEV_TIMEOUT);
@@ -608,7 +636,7 @@ static CommissioningState_t FormJoinNetwork(void) {
 
   IncNetworkTries();
   // run state machine again after 10 seconds
-  emberEventControlSetDelayQS(StateMachineEvent, 40);
+  emberEventControlSetDelayQS(StateMachineEvent, SIMPLE_COMMISSIONING_NETWORK_CHECK_RETRY_TIME);
 
   return SC_EZ_START;
 }
