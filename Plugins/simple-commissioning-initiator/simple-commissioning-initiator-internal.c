@@ -62,6 +62,8 @@ static void MarkDuplicateMatches(void);
 
 /*! Callback for Service Discovery Request */
 static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result);
+static void ProcessEUI64Discovery(const EmberAfServiceDiscoveryResult *result);
+
 
 /*! State Machine Table */
 static const SMTask_t sm_transition_table[] = {
@@ -127,6 +129,13 @@ RemoteSkipClusters_t skip_mask;
  */
 #define SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME	1000
 
+/*! \typedef SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME
+ *
+ *  Define time period that is a Identify Query Response await timeout
+ *  (in milliseconds). If our devic don't get any response it will get timeout event
+ */
+#define SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME	1000
+
 /*! \typedef SIMPLE_COMMISSIONING_NETWORK_RETRY_DELAY
  *
  *  Define time period after which a device retries to update its network status
@@ -159,11 +168,9 @@ static inline void SetNextEvent(const CommissioningEvent_t cevent) {
     during the Identify Query Response
 */
 static inline void SetInConnBaseInfo(const EmberNodeId short_id,
-                                     const uint8_t endpoint,
-                                     const EmberEUI64 eui64) {
+                                     const uint8_t endpoint) {
   incoming_conn.source = short_id;
   incoming_conn.source_ep = endpoint;
-  MEMCOPY(incoming_conn.source_eui64, eui64, EUI64_SIZE);
 }
 
 /*! Helper inline function for setting an incoming connection device's
@@ -184,6 +191,13 @@ static inline void SetInDevicesClustersInfo(const uint16_t *clusters_list,
       incoming_conn.source_cl_arr[supported_cluster_idx++] = clusters_list[i];
     }
   }
+}
+
+/*! Helper inline function for setting an incoming connection device's
+    clusters list and length of that list
+*/
+static inline void SetInConnEUI64Address(const EmberEUI64 in_eui64) {
+	MEMCOPY(incoming_conn.source_eui64, in_eui64, EUI64_SIZE);
 }
 
 /*! State Machine function */
@@ -237,20 +251,11 @@ boolean emberAfIdentifyClusterIdentifyQueryResponseCallback(int16u timeout) {
     emberAfDebugPrintln("DEBUG: Sender 0x%X", emberAfCurrentCommand()->source);
     // Store information about endpoint and short ID of the incoming response
     // for further processing in the Matching (SC_EZ_MATCH) state
-    EmberEUI64 eui64;
-    EmberStatus status = emberLookupEui64ByNodeId(current_cmd->source, eui64);
-
-    if (status != EMBER_SUCCESS) {
-      emberAfDebugPrintln("DEBUG: cannot get EUI64 of the remote node");
-    }
-
-    SetInConnBaseInfo(current_cmd->source,
-                      current_cmd->apsFrame->sourceEndpoint,
-                      eui64);
-    // ID Query received -> go to the discover state for getting clusters info
-    SetNextState(SC_EZ_DISCOVER);
-    SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
-
+		SetInConnBaseInfo(current_cmd->source,
+											current_cmd->apsFrame->sourceEndpoint);
+		// ID Query received -> go to the discover state for getting clusters info
+		SetNextState(SC_EZ_DISCOVER);
+		SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
     emberAfSendImmediateDefaultResponse(EMBER_ZCL_STATUS_SUCCESS);
     emberEventControlSetActive(StateMachineEvent);
   }
@@ -347,54 +352,6 @@ static CommissioningState_t CheckClusters(void) {
   SetNextEvent(SC_EZEV_UNKNOWN);
 
   return (status != EMBER_SUCCESS) ? SC_EZ_UNKNOWN : SC_EZ_DISCOVER;
-}
-
-/*! Callback for Service Discovery Request */
-static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result) {
-  // if we get a matche or a default response handle it
-  // otherwise stop commissioning or go to the next incoming device
-  if (emberAfHaveDiscoveryResponseStatus(result->status)) {
-    EmberAfClusterList *discovered_clusters = (EmberAfClusterList *) result->responseData;
-
-    // if our device requested to bind to server clusters (is_server parameter
-    // during the SimpleCommissioningStart was FALSE) -> use inClusterList of
-    // the incoming device's response
-    // otherwise -> outClusterList (as our device has server clusters)
-    const uint16_t *inc_clusters_arr = (dev_comm_session.is_server) ?
-      discovered_clusters->outClusterList :
-      discovered_clusters->inClusterList;
-    // get correct lenght of the incoming clusters array
-    const uint8_t inc_clusters_arr_len = (dev_comm_session.is_server) ?
-      discovered_clusters->outClusterCount :
-      discovered_clusters->inClusterCount;
-    // init clusters skip mask length for further using
-    InitRemoteSkipCluster(inc_clusters_arr_len);
-    // check how much clusters our device wants to bind to
-    uint8_t supported_clusters = CheckSupportedClusters(inc_clusters_arr,
-                                                        inc_clusters_arr_len);
-
-    emberAfDebugPrintln("DEBUG: Supported clusters %d", supported_clusters);
-    if (supported_clusters == 0) {
-      // we should not do anything with that
-      SetNextEvent(SC_EZEV_BINDING_DONE);
-      SetNextState(SC_EZ_BIND);
-    }
-    else {
-      // update our incoming device structure with information about clusters
-      SetInDevicesClustersInfo(inc_clusters_arr, inc_clusters_arr_len,
-                               supported_clusters);
-      // Now we have all information about responded device's clusters
-      // Start matching procedure for checking how much of them fit for our
-      // device
-      SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
-      SetNextState(SC_EZ_MATCH);
-    }
-  }
-  else {
-    SetNextEvent(SC_EZEV_BAD_DISCOVER);
-  }
-
-  emberEventControlSetActive(StateMachineEvent);
 }
 
 static inline uint8_t FindUnusedBindingIndex(void) {
@@ -511,13 +468,22 @@ static CommissioningState_t MatchingCheck(void) {
   // nothing to do if we unmarked all clusters
   if (GetRemoteSkipMask() == 0) {
     SetNextEvent(SC_EZEV_BINDING_DONE);
+    emberEventControlSetActive(StateMachineEvent);
   }
   else {
-    SetNextEvent(SC_EZEV_BIND);
+  	EmberStatus status = emberAfFindIeeeAddress(incoming_conn.source, ProcessEUI64Discovery);
+
+  	if (status == EMBER_SUCCESS) {
+  		SetNextEvent(SC_EZEV_AWAIT_EUI64);
+  	}
+  	else {
+  		SetNextEvent(SC_EZEV_UNKNOWN);
+  	}
+  	// await for EUI64 response
+  	emberEventControlSetDelayMS(StateMachineEvent, SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME);
   }
 
   emberAfDebugPrintln("DEBUG: Supported clusters mask 0x%X", skip_mask.skip_clusters);
-  emberEventControlSetActive(StateMachineEvent);
 
   return SC_EZ_BIND;
 }
@@ -612,4 +578,65 @@ static inline void ClearNetworkTries(void) {
 
 CommissioningState_t CommissioningStateMachineStatus(void) {
 	return GetNextState();
+}
+
+/*! Callback for Simple Descriptor Request */
+static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result) {
+  // if we get a matche or a default response handle it
+  // otherwise stop commissioning or go to the next incoming device
+  if (emberAfHaveDiscoveryResponseStatus(result->status)) {
+    EmberAfClusterList *discovered_clusters = (EmberAfClusterList *) result->responseData;
+
+    // if our device requested to bind to server clusters (is_server parameter
+    // during the SimpleCommissioningStart was FALSE) -> use inClusterList of
+    // the incoming device's response
+    // otherwise -> outClusterList (as our device has server clusters)
+    const uint16_t *inc_clusters_arr = (dev_comm_session.is_server) ?
+      discovered_clusters->outClusterList :
+      discovered_clusters->inClusterList;
+    // get correct lenght of the incoming clusters array
+    const uint8_t inc_clusters_arr_len = (dev_comm_session.is_server) ?
+      discovered_clusters->outClusterCount :
+      discovered_clusters->inClusterCount;
+    // init clusters skip mask length for further using
+    InitRemoteSkipCluster(inc_clusters_arr_len);
+    // check how much clusters our device wants to bind to
+    uint8_t supported_clusters = CheckSupportedClusters(inc_clusters_arr,
+                                                        inc_clusters_arr_len);
+
+    emberAfDebugPrintln("DEBUG: Supported clusters %d", supported_clusters);
+    if (supported_clusters == 0) {
+      // we should not do anything with that
+      SetNextEvent(SC_EZEV_BINDING_DONE);
+      SetNextState(SC_EZ_BIND);
+    }
+    else {
+      // update our incoming device structure with information about clusters
+      SetInDevicesClustersInfo(inc_clusters_arr, inc_clusters_arr_len,
+                               supported_clusters);
+      // Now we have all information about responded device's clusters
+      // Start matching procedure for checking how much of them fit for our
+      // device
+      SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
+      SetNextState(SC_EZ_MATCH);
+    }
+  }
+  else {
+    SetNextEvent(SC_EZEV_BAD_DISCOVER);
+  }
+
+  emberEventControlSetActive(StateMachineEvent);
+}
+
+/*! Callback for IEEE address Request */
+static void ProcessEUI64Discovery(const EmberAfServiceDiscoveryResult *result) {
+	if (emberAfHaveDiscoveryResponseStatus(result->status)) {
+		SetInConnEUI64Address((const uint8_t *) result->responseData);
+		emberAfDebugPrint("DEBUG: EUI64 ");
+		emberAfPrintLittleEndianEui64(incoming_conn.source_eui64);
+		emberAfDebugPrintln("");
+		SetNextEvent(SC_EZEV_BIND);
+	}
+
+	emberEventControlSetActive(StateMachineEvent);
 }
