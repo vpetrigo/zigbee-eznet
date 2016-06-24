@@ -30,6 +30,8 @@ static CommissioningState_t MatchingCheck(void);
 static CommissioningState_t SetBinding(void);
 static CommissioningState_t UnknownState(void);
 static CommissioningState_t FormJoinNetwork(void);
+static CommissioningState_t CheckQuery(void);
+static CommissioningState_t BindingDone(void);
 
 /// Functions for working with RemoteSkipClusters
 /// Initialize global struct RemoteSkipClusters variable
@@ -79,7 +81,9 @@ static const SMTask_t sm_transition_table[] = {
   {SC_EZ_MATCH, SC_EZEV_CHECK_CLUSTERS, &MatchingCheck},
   {SC_EZ_MATCH, SC_EZEV_NOT_MATCHED, &StopCommissioning},
   {SC_EZ_BIND, SC_EZEV_BIND, &SetBinding},
-  {SC_EZ_BIND, SC_EZEV_BINDING_DONE, &StopCommissioning},
+  {SC_EZ_BIND, SC_EZEV_CHECK_QUEUE, &CheckQuery},
+  {SC_EZ_BIND, SC_EZEV_BINDING_DONE, &BindingDone},
+  {SC_EZ_BIND, SC_EZEV_QUEUE_EMPTY, &StopCommissioning},
   {SC_EZ_UNKNOWN, SC_EZEV_UNKNOWN, &UnknownState}
 };
 
@@ -402,7 +406,7 @@ static inline void InitBindingTableEntry(const EmberEUI64 remote_eui64,
   MEMCOPY(entry->identifier, remote_eui64, EUI64_SIZE);
 }
 
-static void CreateBindings(const MatchDescriptorReq_t * const in_dev) {
+static bool CreateBindings(const MatchDescriptorReq_t * const in_dev) {
 	// here we add bindings to the binding table
 	EmberStatus status = EMBER_SUCCESS;
 
@@ -413,8 +417,9 @@ static void CreateBindings(const MatchDescriptorReq_t * const in_dev) {
 			if (bindex == EMBER_APPLICATION_ERROR_0 ||
 					bindex == EMBER_APPLICATION_ERROR_1) {
 				// error during finding an available binding table index for write to
-				SetNextEvent(SC_EZEV_UNKNOWN);
-				break;
+				// Check query in that case
+				// TODO: handle error
+				return false;
 			}
 
 			EmberBindingTableEntry new_binding;
@@ -424,10 +429,7 @@ static void CreateBindings(const MatchDescriptorReq_t * const in_dev) {
 			if (status == EMBER_SUCCESS) {
 				// Set up the remote short ID for binding for avoiding ZDO broadcast
 				emberSetBindingRemoteNodeId(bindex, in_dev->source);
-				// all bindings successfully added
-				SetNextEvent(SC_EZEV_BINDING_DONE);
 			}
-
 			// DEBUG
 			emberGetBinding(bindex, &new_binding);
 			emberAfDebugPrintln("DEBUG: remote ep 0x%X", new_binding.remote);
@@ -435,6 +437,9 @@ static void CreateBindings(const MatchDescriptorReq_t * const in_dev) {
 													LOW_BYTE(new_binding.clusterId));
 		}
 	}
+
+	// all bindings successfully added
+	return true;
 }
 
 static CommissioningState_t SetBinding(void) {
@@ -448,15 +453,30 @@ static CommissioningState_t SetBinding(void) {
 	MarkDuplicateMatches(in_dev);
 	// nothing to do if we unmarked all clusters
 	if (GetRemoteSkipMask() == 0) {
-		SetNextEvent(SC_EZEV_BINDING_DONE);
+		SetNextEvent(SC_EZEV_CHECK_QUEUE);
 		emberEventControlSetActive(StateMachineEvent);
 	}
+	else if (CreateBindings(in_dev)) {
+		// Create bindings for supported clusters
+		SetNextEvent(SC_EZEV_BINDING_DONE);
+	}
+	else {
+		SetNextEvent(SC_EZEV_CHECK_QUEUE);
+	}
+
+	PopInDeviceDescriptor();
 	emberAfDebugPrintln("DEBUG: Supported clusters mask 0x%X", skip_mask.skip_clusters);
-	// Create bindings for supported clusters
-	CreateBindings(in_dev);
   emberEventControlSetActive(StateMachineEvent);
 
   return SC_EZ_BIND;
+}
+
+static CommissioningState_t BindingDone(void) {
+	emberAfDebugPrintln("DEBUG: Binding Done");
+	// as we've processed the current remote device delete it from the queue
+	SetNextEvent(SC_EZEV_CHECK_QUEUE);
+
+	return SC_EZ_BIND;
 }
 
 static CommissioningState_t StopCommissioning(void) {
@@ -504,12 +524,30 @@ static CommissioningState_t MatchingCheck(void) {
 		SetNextEvent(SC_EZEV_AWAIT_EUI64);
 	}
 	else {
-		SetNextEvent(SC_EZEV_UNKNOWN);
+		SetNextEvent(SC_EZEV_CHECK_QUEUE);
 	}
 	// await for EUI64 response
 	emberEventControlSetDelayMS(StateMachineEvent, SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME);
 
   return SC_EZ_BIND;
+}
+
+static CommissioningState_t CheckQuery(void) {
+	emberAfDebugPrintln("DEBUG: Check query");
+	CommissioningState_t next_st = SC_EZ_UNKNOWN;
+
+	if (GetQueueSize() != 0) {
+		SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
+		next_st = SC_EZ_MATCH;
+	}
+	else {
+		SetNextEvent(SC_EZEV_QUEUE_EMPTY);
+		next_st = SC_EZ_BIND;
+	}
+
+	emberEventControlSetActive(StateMachineEvent);
+
+	return next_st;
 }
 
 static inline void InitRemoteSkipCluster(const uint16_t length) {
@@ -630,9 +668,11 @@ static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result)
 
     emberAfDebugPrintln("DEBUG: Supported clusters %d", supported_clusters);
     if (supported_clusters == 0) {
-      // we should not do anything with that
-      SetNextEvent(SC_EZEV_BINDING_DONE);
-      SetNextState(SC_EZ_BIND);
+      // we should not do anything with that, just wait maybe another response
+    	// would come
+      SetNextEvent(SC_EZEV_TIMEOUT);
+      SetNextState(SC_EZ_WAIT_IDENT_RESP);
+      emberEventControlSetDelayMS(StateMachineEvent, SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME);
     }
     else {
       // update our incoming device structure with information about clusters
@@ -643,13 +683,16 @@ static void ProcessServiceDiscovery(const EmberAfServiceDiscoveryResult *result)
       // device
       SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
       SetNextState(SC_EZ_MATCH);
+      emberEventControlSetActive(StateMachineEvent);
     }
   }
   else {
-    SetNextEvent(SC_EZEV_BAD_DISCOVER);
+  	// we should not do anything with that, just wait maybe another response
+		// would come
+  	SetNextEvent(SC_EZEV_TIMEOUT);
+		SetNextState(SC_EZ_WAIT_IDENT_RESP);
+		emberEventControlSetDelayMS(StateMachineEvent, SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME);
   }
-
-  emberEventControlSetActive(StateMachineEvent);
 }
 
 /*! Callback for IEEE address Request */
