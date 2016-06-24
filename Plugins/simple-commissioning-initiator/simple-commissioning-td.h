@@ -101,7 +101,9 @@ typedef enum CommissioningEvents {
   SC_EZEV_NOT_MATCHED,
   SC_EZEV_AWAIT_EUI64,
   SC_EZEV_BIND,
+  SC_EZEV_CHECK_QUEUE,
   SC_EZEV_BINDING_DONE,
+  SC_EZEV_QUEUE_EMPTY,
   SC_EZEV_UNKNOWN = 255
 } CommissioningEvent_t;
 
