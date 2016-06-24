@@ -475,6 +475,7 @@ static CommissioningState_t BindingDone(void) {
 	emberAfDebugPrintln("DEBUG: Binding Done");
 	// as we've processed the current remote device delete it from the queue
 	SetNextEvent(SC_EZEV_CHECK_QUEUE);
+	emberEventControlSetActive(StateMachineEvent);
 
 	return SC_EZ_BIND;
 }
@@ -538,7 +539,7 @@ static CommissioningState_t CheckQuery(void) {
 
 	if (GetQueueSize() != 0) {
 		SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
-		next_st = SC_EZ_MATCH;
+		next_st = SC_EZ_DISCOVER;
 	}
 	else {
 		SetNextEvent(SC_EZEV_QUEUE_EMPTY);
