@@ -402,44 +402,58 @@ static inline void InitBindingTableEntry(const EmberEUI64 remote_eui64,
   MEMCOPY(entry->identifier, remote_eui64, EUI64_SIZE);
 }
 
+static void CreateBindings(const MatchDescriptorReq_t * const in_dev) {
+	// here we add bindings to the binding table
+	EmberStatus status = EMBER_SUCCESS;
+
+	for (size_t i = 0; i < in_dev->source_cl_arr_len; ++i) {
+		if (!IsSkipCluster(i)) {
+			uint8_t bindex = FindUnusedBindingIndex();
+
+			if (bindex == EMBER_APPLICATION_ERROR_0 ||
+					bindex == EMBER_APPLICATION_ERROR_1) {
+				// error during finding an available binding table index for write to
+				SetNextEvent(SC_EZEV_UNKNOWN);
+				break;
+			}
+
+			EmberBindingTableEntry new_binding;
+			InitBindingTableEntry(in_dev->source_eui64, in_dev->source_cl_arr[i],
+														in_dev->source_ep, &new_binding);
+			status = emberSetBinding(bindex, &new_binding);
+			if (status == EMBER_SUCCESS) {
+				// Set up the remote short ID for binding for avoiding ZDO broadcast
+				emberSetBindingRemoteNodeId(bindex, in_dev->source);
+				// all bindings successfully added
+				SetNextEvent(SC_EZEV_BINDING_DONE);
+			}
+
+			// DEBUG
+			emberGetBinding(bindex, &new_binding);
+			emberAfDebugPrintln("DEBUG: remote ep 0x%X", new_binding.remote);
+			emberAfDebugPrintln("DEBUG: cluster id 0x%X%X", HIGH_BYTE(new_binding.clusterId),
+													LOW_BYTE(new_binding.clusterId));
+		}
+	}
+}
+
 static CommissioningState_t SetBinding(void) {
   emberAfDebugPrintln("DEBUG: Set Binding");
-  EmberStatus status = EMBER_SUCCESS;
 	MatchDescriptorReq_t *in_dev = GetTopInDeviceDescriptor();
 	assert(in_dev != NULL);
-  // here we add bindings to the binding table
-  for (size_t i = 0; i < in_dev->source_cl_arr_len; ++i) {
-    if (!IsSkipCluster(i)) {
-      uint8_t bindex = FindUnusedBindingIndex();
-
-      if (bindex == EMBER_APPLICATION_ERROR_0 ||
-          bindex == EMBER_APPLICATION_ERROR_1) {
-        // error during finding an available binding table index for write to
-        SetNextEvent(SC_EZEV_UNKNOWN);
-        break;
-      }
-
-      EmberBindingTableEntry new_binding;
-      InitBindingTableEntry(in_dev->source_eui64,
-      											in_dev->source_cl_arr[i],
-      											in_dev->source_ep,
-                            &new_binding);
-      status = emberSetBinding(bindex, &new_binding);
-      if (status == EMBER_SUCCESS) {
-        // Set up the remote short ID for binding for avoiding ZDO broadcast
-        emberSetBindingRemoteNodeId(bindex, in_dev->source);
-        // all bindings successfully added
-				SetNextEvent(SC_EZEV_BINDING_DONE);
-      }
-
-      // DEBUG
-      emberGetBinding(bindex, &new_binding);
-      emberAfDebugPrintln("DEBUG: remote ep 0x%X", new_binding.remote);
-      emberAfDebugPrintln("DEBUG: cluster id 0x%X%X", HIGH_BYTE(new_binding.clusterId),
-                          LOW_BYTE(new_binding.clusterId));
-    }
-  }
-
+	// init clusters skip mask length for checking for duplicates in the binding
+	// table
+	InitRemoteSkipCluster(in_dev->source_cl_arr_len);
+	// check the supported clusters list for existence in the binding table
+	MarkDuplicateMatches(in_dev);
+	// nothing to do if we unmarked all clusters
+	if (GetRemoteSkipMask() == 0) {
+		SetNextEvent(SC_EZEV_BINDING_DONE);
+		emberEventControlSetActive(StateMachineEvent);
+	}
+	emberAfDebugPrintln("DEBUG: Supported clusters mask 0x%X", skip_mask.skip_clusters);
+	// Create bindings for supported clusters
+	CreateBindings(in_dev);
   emberEventControlSetActive(StateMachineEvent);
 
   return SC_EZ_BIND;
@@ -482,32 +496,18 @@ static void MarkDuplicateMatches(const MatchDescriptorReq_t * const in_dev) {
 
 static CommissioningState_t MatchingCheck(void) {
   emberAfDebugPrintln("DEBUG: Matching Check");
-  // init clusters skip mask length for checking for duplicates in the binding
-  // table
-  MatchDescriptorReq_t *in_dev = GetTopInDeviceDescriptor();
+	MatchDescriptorReq_t *in_dev = GetTopInDeviceDescriptor();
 	assert(in_dev != NULL);
-  InitRemoteSkipCluster(in_dev->source_cl_arr_len);
-  // check the supported clusters list for existence in the binding table
-  MarkDuplicateMatches(in_dev);
-  // nothing to do if we unmarked all clusters
-  if (GetRemoteSkipMask() == 0) {
-    SetNextEvent(SC_EZEV_BINDING_DONE);
-    emberEventControlSetActive(StateMachineEvent);
-  }
-  else {
-  	EmberStatus status = emberAfFindIeeeAddress(incoming_conn.source, ProcessEUI64Discovery);
+	EmberStatus status = emberAfFindIeeeAddress(in_dev->source, ProcessEUI64Discovery);
 
-  	if (status == EMBER_SUCCESS) {
-  		SetNextEvent(SC_EZEV_AWAIT_EUI64);
-  	}
-  	else {
-  		SetNextEvent(SC_EZEV_UNKNOWN);
-  	}
-  	// await for EUI64 response
-  	emberEventControlSetDelayMS(StateMachineEvent, SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME);
-  }
-
-  emberAfDebugPrintln("DEBUG: Supported clusters mask 0x%X", skip_mask.skip_clusters);
+	if (status == EMBER_SUCCESS) {
+		SetNextEvent(SC_EZEV_AWAIT_EUI64);
+	}
+	else {
+		SetNextEvent(SC_EZEV_UNKNOWN);
+	}
+	// await for EUI64 response
+	emberEventControlSetDelayMS(StateMachineEvent, SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME);
 
   return SC_EZ_BIND;
 }
