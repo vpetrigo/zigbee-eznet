@@ -256,15 +256,20 @@ boolean emberAfIdentifyClusterIdentifyQueryResponseCallback(int16u timeout) {
   if (emberAfGetNodeId() != current_cmd->source && timeout != 0) {
     emberAfDebugPrintln("DEBUG: Got ID Query response");
     emberAfDebugPrintln("DEBUG: Sender 0x%2X", emberAfCurrentCommand()->source);
+    // Queue is empty, so we can start commissioning process
+    // otherwise we push it in the queue and will process later
+    if (GetQueueSize() == 0) {
+    	// ID Query received -> go to the discover state for getting clusters info
+			emberAfDebugPrintln("DEBUG: QUEUE IS EMPTY");
+			SetNextState(SC_EZ_DISCOVER);
+			SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
+			emberEventControlSetActive(StateMachineEvent);
+		}
     // Store information about endpoint and short ID of the incoming response
     // for further processing in the Matching (SC_EZ_MATCH) state
 		SetInConnBaseInfo(current_cmd->source,
 											current_cmd->apsFrame->sourceEndpoint);
-		// ID Query received -> go to the discover state for getting clusters info
-		SetNextState(SC_EZ_DISCOVER);
-		SetNextEvent(SC_EZEV_CHECK_CLUSTERS);
     emberAfSendImmediateDefaultResponse(EMBER_ZCL_STATUS_SUCCESS);
-    emberEventControlSetActive(StateMachineEvent);
   }
 
   return TRUE;
