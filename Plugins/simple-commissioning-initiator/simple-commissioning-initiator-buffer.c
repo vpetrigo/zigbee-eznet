@@ -9,6 +9,8 @@ MatchDescriptorReq_t data[QUEUE_SIZE];
 
 #define RING_BUFFER_ERROR 255
 
+// Internal container for remote devices' Match Descriptors
+// Simple Ring Buffer
 typedef struct RingBuffer {
   MatchDescriptorReq_t *buffer;
   uint8_t begin;
@@ -17,17 +19,27 @@ typedef struct RingBuffer {
   uint8_t capacity;
 } RingBuffer_t;
 
+// Remote Devices queue
 typedef struct MatchDescriptorQueue {
   RingBuffer_t internal_data;
 } MatchDescriptorQueue_t;
 
-static inline void InitQueueInternalData(MatchDescriptorQueue_t *queue);
-static inline bool QueueIsFull(MatchDescriptorQueue_t *queue);
-
 // Global queue
 MatchDescriptorQueue_t devices_queue;
 
-/// Ring Buffer internal functions
+// Queue private interface
+static inline void InitQueueInternalData(MatchDescriptorQueue_t *queue);
+static inline bool QueueIsFull(MatchDescriptorQueue_t *queue);
+
+// Ring Buffer interface
+static inline void RingBufferInit(RingBuffer_t *buf);
+static inline bool RingBufferIsFull(RingBuffer_t *buf);
+static inline bool RingBufferIsEmpty(RingBuffer_t *buf);
+static inline uint8_t RingBufferSize(RingBuffer_t *buf);
+static inline uint8_t RingBufferPush(RingBuffer_t *buf, const MatchDescriptorReq_t * const data);
+static inline uint8_t RingBufferPopFront(RingBuffer_t *buf);
+static inline void *RingBufferGet(RingBuffer_t *buf);
+
 static inline void RingBufferInit(RingBuffer_t *buf) {
 	buf->buffer = data;
 	buf->begin = 0;

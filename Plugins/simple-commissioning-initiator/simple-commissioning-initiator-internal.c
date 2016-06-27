@@ -174,6 +174,7 @@ static inline void SetNextEvent(const CommissioningEvent_t cevent) {
 */
 static inline void SetInConnBaseInfo(const EmberNodeId short_id,
                                      const uint8_t endpoint) {
+	// try to add the new remote device descriptor to the queue
 	if (!AddInDeviceDescriptor(short_id, endpoint)) {
 		// queue is probably full
 		emberAfDebugPrintln("DEBUG: WARNING: incoming device response will be missed");
