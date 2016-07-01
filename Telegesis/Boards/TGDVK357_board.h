@@ -161,37 +161,37 @@ enum HalBoardLedPins {
  * @brief The actual GPIO BUTTON1 is connected to.  This define should
  * be used whenever referencing BUTTON1.
  */
-// It is definitely BUTTON3 on the D
-#define BUTTON1             PORTB_PIN(0)
+// It is BUTTON2 on the DVK
+#define BUTTON1             PORTA_PIN(1)
 /**
  * @brief The GPIO input register for BUTTON1.
  */
-#define BUTTON1_IN          GPIO_PBIN
+#define BUTTON1_IN          GPIO_PAIN
 /**
  * @brief Point the proper IRQ at the desired pin for BUTTON1.
- * @note For this board, IRQC is pointed at PC6
+ * @note For this board, IRQD is pointed at PA1
  */
-#define BUTTON1_SEL()       do { } while(0)
+#define BUTTON1_SEL()       do { GPIO_IRQDSEL = BUTTON1; } while(0)
 /**
  * @brief The interrupt service routine for BUTTON1.
  */
-#define BUTTON1_ISR         halIrqAIsr
+#define BUTTON1_ISR         halIrqDIsr
 /**
  * @brief The interrupt configuration register for BUTTON1.
  */
-#define BUTTON1_INTCFG      GPIO_INTCFGA
+#define BUTTON1_INTCFG      GPIO_INTCFGD
 /**
  * @brief The interrupt enable bit for BUTTON1.
  */
-#define BUTTON1_INT_EN_BIT  INT_IRQA
+#define BUTTON1_INT_EN_BIT  INT_IRQD
 /**
  * @brief The interrupt flag bit for BUTTON1.
  */
-#define BUTTON1_FLAG_BIT    INT_IRQAFLAG
+#define BUTTON1_FLAG_BIT    INT_IRQDFLAG
 /**
  * @brief The missed interrupt bit for BUTTON1.
  */
-#define BUTTON1_MISS_BIT    INT_MISSIRQA
+#define BUTTON1_MISS_BIT    INT_MISSIRQD
 //@} //END OF BUTTON DEFINITIONS
 
 /** @name Radio HoldOff
