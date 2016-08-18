@@ -617,50 +617,82 @@ GpioMaskType gpioRadioPowerBoardMask = 0
 /**
  * @brief Initialize GPIO powerup configuration variables.
  */
-#define DEFINE_POWERUP_GPIO_CFG_VARIABLES()     \
-uint16_t gpioCfgPowerUp[6] = {                    \
-                            (0x1144), \
-                            (0x1199), \
-                            (0x4494), \
-                            (0x9409), \
-                            (0x4981), \
-                            (0x1814)  \
+#define DEFINE_POWERUP_GPIO_CFG_VARIABLES()                      \
+uint16_t gpioCfgPowerUp[6] = {                                   \
+                             /* Button 1 */                      \
+                            ((GPIOCFG_IN         <<PA0_CFG_BIT) |\
+                             /* Button 2 */                      \
+                             (GPIOCFG_IN         <<PA1_CFG_BIT) |\
+                             /* Temp sensor supply */            \
+                             (GPIOCFG_OUT        <<PA2_CFG_BIT) |\
+                             /* Light sensor supply */           \
+                             (GPIOCFG_OUT        <<PA3_CFG_BIT)),\
+                            ((GPIOCFG_IN_PUD     <<PA4_CFG_BIT) |\
+                             (GPIOCFG_IN_PUD     <<PA5_CFG_BIT) |\
+                             (GPIOCFG_OUT        <<PA6_CFG_BIT) |\
+                             (GPIOCFG_OUT        <<PA7_CFG_BIT)),\
+                             /* Button 3 */                      \
+                            ((GPIOCFG_IN         <<PB0_CFG_BIT) |\
+                             /* SC1 TXD */                       \
+                             (GPIOCFG_OUT_ALT    <<PB1_CFG_BIT) |\
+                             /* SC1 RXD */                       \
+                             (GPIOCFG_IN         <<PB2_CFG_BIT) |\
+                             /* SC1 CTS */                       \
+                             (GPIOCFG_IN         <<PB3_CFG_BIT)),\
+                             /* SC1 RTS */                       \
+                            ((GPIOCFG_OUT_ALT    <<PB4_CFG_BIT) |\
+                             /* ADC Temp sensor */               \
+                             (GPIOCFG_ANALOG     <<PB5_CFG_BIT) |\
+                             /* Button 4 / LED 1 */              \
+                             (GPIOCFG_IN         <<PB6_CFG_BIT) |\
+                             /* Buzzer */                        \
+                             (GPIOCFG_OUT        <<PB7_CFG_BIT)),\
+                             /* LED 2 */                         \
+                            ((GPIOCFG_IN         <<PC0_CFG_BIT) |\
+                             /* ADC Light sensor */              \
+                             (GPIOCFG_IN_PUD     <<PC1_CFG_BIT) |\
+                             (GPIOCFG_IN_PUD     <<PC2_CFG_BIT) |\
+                             (GPIOCFG_IN_PUD     <<PC3_CFG_BIT)),\
+                            ((GPIOCFG_IN_PUD     <<PC4_CFG_BIT) |\
+                             (GPIOCFG_IN_PUD     <<PC5_CFG_BIT) |\
+                             (GPIOCFG_IN_PUD     <<PC6_CFG_BIT) |\
+                             (GPIOCFG_IN_PUD     <<PC7_CFG_BIT)) \
                            }
-
 
 /**
  * @brief Initialize GPIO powerup output variables.
  */
 #define DEFINE_POWERUP_GPIO_OUTPUT_DATA_VARIABLES()                       \
 uint8_t gpioOutPowerUp[3] = {                                               \
+                            /* Pull up for buttons */                     \
                            ((GPIOOUT_PULLUP     <<PA0_BIT)|               \
                             (GPIOOUT_PULLUP     <<PA1_BIT)|               \
-                            (GPIOOUT_PULLDOWN   <<PA2_BIT)|               \
-                            /* nSSEL is default idle high */              \
+                            /* Power down sensors yet */                  \
+                            (GPIOOUT_PULLUP     <<PA2_BIT)|               \
                             (GPIOOUT_PULLDOWN   <<PA3_BIT)|               \
-                            (PWRUP_OUT_PTI_EN   <<PA4_BIT)|               \
-                            (PWRUP_OUT_PTI_DATA <<PA5_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PA4_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PA5_BIT)|               \
                             (GPIOOUT_PULLUP     <<PA6_BIT)|               \
                             /* LED default off */                         \
                             (GPIOOUT_PULLUP     <<PA7_BIT)),              \
-                           ((1                  <<PB0_BIT)|               \
-                            (1                  <<PB1_BIT)|  /* SC1TXD  */\
-                            (1                  <<PB2_BIT)|  /* SC1RXD  */\
-                            (1                  <<PB3_BIT)|  /* SC1nCTS */\
-                            (0                  <<PB4_BIT)|  /* SC1nRTS */\
-                            (0                  <<PB5_BIT)|               \
+                           ((GPIOOUT_PULLUP     <<PB0_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PB1_BIT)|  /* SC1TXD  */\
+                            (GPIOOUT_PULLUP     <<PB2_BIT)|  /* SC1RXD  */\
+                            (GPIOOUT_PULLUP     <<PB3_BIT)|  /* SC1nCTS */\
+                            (GPIOOUT_PULLUP     <<PB4_BIT)|  /* SC1nRTS */\
+                            (GPIOOUT_PULLDOWN   <<PB5_BIT)|               \
                             /* PB6 has button needing a pullup */         \
                             (GPIOOUT_PULLUP     <<PB6_BIT)|               \
-                            (0                  <<PB7_BIT)),              \
+                            (GPIOOUT_PULLDOWN   <<PB7_BIT)),              \
                            ((GPIOOUT_PULLUP     <<PC0_BIT)|               \
-                            (GPIOOUT_PULLDOWN   <<PC1_BIT)|               \
-                            (1                  <<PC2_BIT)|               \
-                            (0                  <<PC3_BIT)|               \
-                            (0                  <<PC4_BIT)|               \
-                            (PWRUP_OUT_LED2     <<PC5_BIT)|               \
-                            (PWRUP_OUT_BUTTON1  <<PC6_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PC1_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PC2_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PC3_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PC4_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PC5_BIT)|               \
+                            (GPIOOUT_PULLUP     <<PC6_BIT)|               \
                             /* Temp Sensor default on */                  \
-                            (1                  <<PC7_BIT))               \
+                            (GPIOOUT_PULLUP     <<PC7_BIT))               \
                           }
 
 
