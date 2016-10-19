@@ -710,8 +710,8 @@ uint16_t gpioCfgPowerDown[6] = {                                                
                                (PWRDN_CFG_DFL_RHO  <<PA6_CFG_BIT)|              \
                                (GPIOCFG_OUT        <<PA7_CFG_BIT)),             \
                               ((GPIOCFG_IN         <<PB0_CFG_BIT)|              \
-                               (GPIOCFG_OUT        <<PB1_CFG_BIT)| /* SC1TXD  */\
-                               (GPIOCFG_IN_PUD     <<PB2_CFG_BIT)| /* SC1RXD  */\
+                               (GPIOCFG_OUT_ALT    <<PB1_CFG_BIT)| /* SC1TXD  */\
+                               (GPIOCFG_IN         <<PB2_CFG_BIT)| /* SC1RXD  */\
                                (GPIOCFG_IN_PUD     <<PB3_CFG_BIT)),/* SC1nCTS */\
                               ((GPIOCFG_IN_PUD     <<PB4_CFG_BIT)| /* SC1nRTS */\
                                /* disable analog for sleep */                   \
@@ -931,4 +931,3 @@ uint8_t gpioOutPowerDown[3] = {                                               \
 /** @} END Board Specific Functions */
 
 /** @} END addtogroup */
-
