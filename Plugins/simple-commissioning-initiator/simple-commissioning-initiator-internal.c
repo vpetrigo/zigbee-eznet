@@ -134,7 +134,8 @@ RemoteSkipClusters_t skip_mask;
  *  (in milliseconds). If our devic don't get any response it will get timeout
  * event
  */
-#define SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME 1000
+#define SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME() \
+  (2 * emberAfGetShortPollIntervalMsCallback())
 
 /*! \typedef SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME
  *
@@ -142,7 +143,8 @@ RemoteSkipClusters_t skip_mask;
  *  (in milliseconds). If our devic don't get any response it will get timeout
  * event
  */
-#define SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME 1000
+#define SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME() \
+  (2 * emberAfGetShortPollIntervalMsCallback())
 
 /*! \typedef SIMPLE_COMMISSIONING_NETWORK_RETRY_DELAY
  *
@@ -350,7 +352,7 @@ static CommissioningState_t BroadcastIdentifyQuery(void) {
   // Schedule event for awaiting for responses for 1 second
   // TODO: Set hardcoded value as plugin's option parameter as optional value
   emberEventControlSetDelayMS(StateMachineEvent,
-                              SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME);
+                              SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME());
   // If Identify Query responses won't be received state machine just will call
   // Timeout handler
   SetNextEvent(SC_EZEV_TIMEOUT);
@@ -538,7 +540,7 @@ static CommissioningState_t MatchingCheck(void) {
   }
   // await for EUI64 response
   emberEventControlSetDelayMS(StateMachineEvent,
-                              SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME);
+                              SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME());
 
   return SC_EZ_BIND;
 }
@@ -678,7 +680,7 @@ static void ProcessServiceDiscovery(
       SetNextEvent(SC_EZEV_TIMEOUT);
       SetNextState(SC_EZ_WAIT_IDENT_RESP);
       emberEventControlSetDelayMS(
-          StateMachineEvent, SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME);
+          StateMachineEvent, SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME());
     } else {
       // update our incoming device structure with information about clusters
       SetInDevicesClustersInfo(inc_clusters_arr, inc_clusters_arr_len,
@@ -696,7 +698,7 @@ static void ProcessServiceDiscovery(
     SetNextEvent(SC_EZEV_TIMEOUT);
     SetNextState(SC_EZ_WAIT_IDENT_RESP);
     emberEventControlSetDelayMS(
-        StateMachineEvent, SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME);
+        StateMachineEvent, SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME());
   }
 }
 
