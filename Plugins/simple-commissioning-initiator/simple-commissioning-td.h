@@ -4,11 +4,12 @@
 #include "app/framework/include/af.h"
 
 /*! \define INCOMING_DEVICE_CLUSTERS_LIST_LEN
-  
-    Determine how much supported clusters might be stored 
+
+    Determine how much supported clusters might be stored
     in the internal memory
 */
-#define INCOMING_DEVICE_CLUSTERS_LIST_LEN EMBER_AF_PLUGIN_SIMPLE_COMMISSIONING_INITIATOR_COMMISSIONING_CLUSTERS_LIST_LEN
+#define INCOMING_DEVICE_CLUSTERS_LIST_LEN \
+  EMBER_AF_PLUGIN_SIMPLE_COMMISSIONING_INITIATOR_COMMISSIONING_CLUSTERS_LIST_LEN
 
 /*! \typedef struct DevicesCommissioningClusters
     \brief Device's clusters for commissioning
@@ -35,7 +36,7 @@ typedef struct DeviceCommissioningClusters {
     \brief Match Descriptor Request structure
 
     When a device that sent Identify Query gets Identify
-    Query Responses, we need information listed below 
+    Query Responses, we need information listed below
     for further Binding state
 */
 typedef struct MatchDescriptorReq {
@@ -55,7 +56,7 @@ typedef struct MatchDescriptorReq {
     \brief Remote skip clusters structure
     that help to skip already binded or currently not represented
     clusters on the device
-      
+
     In the current implementation up to 16 clusters in a list might
     be processed
 */
@@ -85,12 +86,12 @@ typedef enum CommissioningStates {
 
 /*! \typedef enum CommissioningEvents
     \brief Commissioning Events
-    
+
     Commissioning events describe what state machine
     have to do in different cases
 */
 typedef enum CommissioningEvents {
-	SC_EZEV_IDLE = 0,
+  SC_EZEV_IDLE = 0,
   SC_EZEV_CHECK_NETWORK,
   SC_EZEV_FORM_JOIN_NETWORK,
   SC_EZEV_BCAST_IDENT_QUERY,
@@ -109,7 +110,7 @@ typedef enum CommissioningEvents {
 
 /*! \typedef struct StateMachineTask
     \brief State Machine Task definition
-    
+
     Every task describes particular state, event and
     handler that has to be called
 */
@@ -120,7 +121,7 @@ typedef struct StateMachineTask {
 } SMTask_t;
 
 /*! \typedef struct StateMachineNextState
-    
+
     Typedef for storing the next state for the state machine
 */
 typedef struct StateMachineNextState {
@@ -128,4 +129,4 @@ typedef struct StateMachineNextState {
   CommissioningEvent_t next_event;
 } SMNext_t;
 
-#endif // SIMPLE_COMMISSIONING_TYPEDEFS_H
+#endif  // SIMPLE_COMMISSIONING_TYPEDEFS_H
