@@ -2,6 +2,7 @@
 #define SIMPLE_COMMISSIONING_INITIATOR_INTERNAL_H
 
 #include "app/framework/include/af.h"
+#include "simple-commissioning-td.h"
 
 /// External variables used by internal and/or public implementation
 extern DevCommClusters_t dev_comm_session;
