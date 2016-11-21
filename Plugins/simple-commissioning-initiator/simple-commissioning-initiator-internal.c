@@ -135,7 +135,7 @@ RemoteSkipClusters_t skip_mask;
  * event
  */
 #define SIMPLE_COMMISSIONING_IDENTIFY_RESPONSE_WAIT_TIME() \
-  (2 * emberAfGetShortPollIntervalMsCallback())
+  (2 * emberAfGetShortPollIntervalMsCallback() + 100)
 
 /*! \typedef SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME
  *
@@ -144,7 +144,7 @@ RemoteSkipClusters_t skip_mask;
  * event
  */
 #define SIMPLE_COMMISSIONING_EUI64_RESPONSE_WAIT_TIME() \
-  (2 * emberAfGetShortPollIntervalMsCallback())
+  (2 * emberAfGetShortPollIntervalMsCallback() + 100)
 
 /*! \typedef SIMPLE_COMMISSIONING_NETWORK_RETRY_DELAY
  *
