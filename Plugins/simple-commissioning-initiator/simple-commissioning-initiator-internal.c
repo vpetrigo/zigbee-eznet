@@ -618,13 +618,15 @@ static CommissioningState_t FormJoinNetwork(void) {
 
   if (emAfCurrentZigbeeProNetwork->nodeType == EMBER_COORDINATOR) {
     status = emberAfFindUnusedPanIdAndForm();
-  } else {
+  }
+  else {
     status = emberAfStartSearchForJoinableNetwork();
   }
 
   if (status != EMBER_SUCCESS) {
     SetNextEvent(SC_EZEV_UNKNOWN);
-  } else {
+  }
+  else {
     SetNextEvent(SC_EZEV_CHECK_NETWORK);
   }
 
