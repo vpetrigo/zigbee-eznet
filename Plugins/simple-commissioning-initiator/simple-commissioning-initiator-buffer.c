@@ -5,10 +5,9 @@
 /// Handy renaming of the long name
 /// EMBER_AF_PLUGIN_SIMPLE_COMMISSIONING_INITIATOR_REMOTES_QUEUE
 #define QUEUE_SIZE EMBER_AF_PLUGIN_SIMPLE_COMMISSIONING_INITIATOR_REMOTES_QUEUE
+#define RING_BUFFER_ERROR 255
 
 MatchDescriptorReq_t data[QUEUE_SIZE];
-
-#define RING_BUFFER_ERROR 255
 
 // Internal container for remote devices' Match Descriptors
 // Simple Ring Buffer
