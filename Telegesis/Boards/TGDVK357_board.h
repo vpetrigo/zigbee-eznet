@@ -3,7 +3,6 @@
  *
  * <!-- Copyright 2008-2011 by Ember Corporation. All rights reserved.   *80*-->
  */
-
 /** @addtogroup board
  *  @brief Functions and definitions specific to the breakout board.
  *
